@@ -138,21 +138,33 @@ input[type="number"] {
 @media (min-width: 769px) {
   /* Hapus aturan yang menyembunyikan mobile-nav di desktop */
 }
+
+/* Print-specific styles for reports and notes */
 @media print {
-  body * {
-      visibility: hidden;
+  body > *:not(#profitLossSection),
+  body > *:not(#penjualanSection),
+  body > *:not(#pembelianSection) {
+      display: none !important;
   }
-  #strukOutputPenjualan, #strukOutputPenjualan * {
-      visibility: visible;
-  }
-  #strukOutputPenjualan {
+  #profitLossSection, #penjualanSection, #pembelianSection {
+      display: block !important;
       position: absolute;
-      left: 0;
       top: 0;
+      left: 0;
       width: 100%;
-  }
-  .main-content-area {
-      margin-top: 0;
+      margin: 0;
       padding: 0;
+      box-shadow: none !important;
+  }
+
+  #profitLossSection .report-table-container,
+  #profitLossSection .report-summary,
+  #penjualanSection .main-content-wrapper,
+  #pembelianSection .main-content-wrapper {
+      box-shadow: none !important;
+  }
+
+  .mobile-nav, header, .action-buttons, button, input, label, .filter-controls, .report-header .flex, .search-icon-btn, .qty-price-group {
+      display: none !important;
   }
 }
