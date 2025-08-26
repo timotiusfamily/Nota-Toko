@@ -54,6 +54,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
             showSection('dashboard', document.getElementById('navDashboard'));
             document.getElementById('filterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('filterEndDate').value = formattedDate;
+
+            document.getElementById('historyFilterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+            document.getElementById('historyFilterEndDate').value = formattedDate;
+
         } else {
             window.location.href = 'login.html';
         }
@@ -204,8 +208,7 @@ function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
     if (sectionId === 'dashboard') {
         renderDashboard();
     } else if (sectionId === 'history') {
-        renderSalesHistory();
-        renderPurchaseHistory();
+        filterHistory(); // Panggil filter history saat masuk tab
     } else if (sectionId === 'pending') {
         renderPendingSales();
     } else if (sectionId === 'profitLoss') {
@@ -386,8 +389,6 @@ async function selesaikanPembayaran() {
     
     // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', 'green');
-    
-    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
 }
 
 function renderStrukPreviewPenjualan(strukData) {
@@ -611,8 +612,9 @@ async function simpanNotaPembelian() {
     await saveDataToFirestore();
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
+    document.getElementById('shareButtonsPembelian').style.display = 'flex'; // Pastikan tombol muncul
     
-    // Tampilkan notifikasi non-blokir tanpa menghapus struk
+    // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
     
     // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
@@ -634,7 +636,6 @@ function renderStrukPreviewPembelian(strukData) {
     strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPembelian)}</span></p>`;
     
     document.getElementById('strukContentPembelian').innerHTML = strukHTML;
-    document.getElementById('shareButtonsPembelian').style.display = 'flex';
 }
 
 function shareViaWhatsAppPembelian() {
@@ -811,12 +812,88 @@ function selectMasterItemFromModal(name, sellingPrice, purchasePrice) {
         document.getElementById('namaBarangPembelian').value = name;
         document.getElementById('hargaBeliPembelian').value = purchasePrice;
         document.getElementById('hargaJualPembelian').value = sellingPrice;
+        document.getElementById('jumlahKuantitasPembelian').value = '';
         document.getElementById('jumlahKuantitasPembelian').focus();
     }
     closeMasterItemModal();
 }
 
 // --- History, Pending, Profit/Loss, Stock Reports ---
+async function filterHistory() {
+    const startDate = document.getElementById('historyFilterStartDate').value;
+    const endDate = document.getElementById('historyFilterEndDate').value;
+    const filterName = document.getElementById('historyFilterName').value.toLowerCase();
+
+    const filteredSales = salesHistory.filter(struk => {
+        const strukDate = struk.tanggal;
+        const dateMatch = (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
+        const nameMatch = !filterName || (struk.pembeli && struk.pembeli.toLowerCase().includes(filterName));
+        return dateMatch && nameMatch;
+    });
+
+    const filteredPurchases = purchaseHistory.filter(struk => {
+        const strukDate = struk.tanggal;
+        const dateMatch = (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
+        const nameMatch = !filterName || (struk.supplier && struk.supplier.toLowerCase().includes(filterName));
+        return dateMatch && nameMatch;
+    });
+
+    renderFilteredSalesHistory(filteredSales);
+    renderFilteredPurchaseHistory(filteredPurchases);
+}
+
+function renderFilteredSalesHistory(filteredSales) {
+    const historyListBody = document.querySelector('#salesHistoryListBody');
+    historyListBody.innerHTML = filteredSales.length === 0 ? '<tr><td colspan="6" class="text-center py-4 text-gray-500">Belum ada riwayat penjualan.</td></tr>' : '';
+    filteredSales.forEach(struk => {
+        const row = historyListBody.insertRow();
+        row.classList.add('hover:bg-gray-50');
+        row.insertCell(0).innerText = struk.id;
+        row.insertCell(1).innerText = struk.tanggal;
+        row.insertCell(2).innerText = struk.pembeli;
+        row.insertCell(3).innerText = formatRupiah(struk.totalPenjualan);
+        row.insertCell(4).innerText = formatRupiah(struk.totalLabaRugi || 0);
+        const actionCell = row.insertCell(5);
+        actionCell.classList.add('history-actions', 'flex', 'gap-2', 'py-2');
+        const viewButton = document.createElement('button');
+        viewButton.innerText = 'Lihat';
+        viewButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
+        viewButton.onclick = () => viewHistoryStruk(struk.id, 'penjualan');
+        actionCell.appendChild(viewButton);
+        const deleteButton = document.createElement('button');
+        deleteButton.innerText = 'Hapus';
+        deleteButton.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
+        deleteButton.onclick = () => deleteHistoryStruk(struk.id, 'penjualan');
+        actionCell.appendChild(deleteButton);
+    });
+}
+
+function renderFilteredPurchaseHistory(filteredPurchases) {
+    const historyListBody = document.querySelector('#purchaseHistoryListBody');
+    historyListBody.innerHTML = filteredPurchases.length === 0 ? '<tr><td colspan="5" class="text-center py-4 text-gray-500">Belum ada riwayat pembelian.</td></tr>' : '';
+    filteredPurchases.forEach(struk => {
+        const row = historyListBody.insertRow();
+        row.classList.add('hover:bg-gray-50');
+        row.insertCell(0).innerText = struk.id;
+        row.insertCell(1).innerText = struk.tanggal;
+        row.insertCell(2).innerText = struk.supplier;
+        row.insertCell(3).innerText = formatRupiah(struk.totalPembelian);
+        const actionCell = row.insertCell(4);
+        actionCell.classList.add('history-actions', 'flex', 'gap-2', 'py-2');
+        const viewButton = document.createElement('button');
+        viewButton.innerText = 'Lihat';
+        viewButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
+        viewButton.onclick = () => viewHistoryStruk(struk.id, 'pembelian');
+        actionCell.appendChild(viewButton);
+        const deleteButton = document.createElement('button');
+        deleteButton.innerText = 'Hapus';
+        deleteButton.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
+        deleteButton.onclick = () => deleteHistoryStruk(struk.id, 'pembelian');
+        actionCell.appendChild(deleteButton);
+    });
+}
+
+
 async function clearSalesHistory() {
     showMessageBox('Yakin ingin menghapus SEMUA riwayat penjualan? Stok tidak dikembalikan.', true, async () => {
         salesHistory = [];
