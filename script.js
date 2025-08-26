@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
             document.getElementById('namaBarangPembelian').addEventListener('blur', () => { setTimeout(() => { document.getElementById('namaBarangSuggestionsPembelian').innerHTML = ''; }, 100); });
             document.getElementById('restoreFileInput').addEventListener('change', restoreMasterItems);
             
-            showSection('penjualan', document.getElementById('navPenjualan'));
+            showSection('dashboard', document.getElementById('navDashboard'));
             document.getElementById('filterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('filterEndDate').value = formattedDate;
         } else {
@@ -62,6 +62,7 @@ async function loadDataFromFirestore() {
             console.log("No data found for user, initializing new data.");
         }
         renderMasterItems();
+        renderDashboard();
     } catch (error) {
         console.error("Error loading data:", error);
         showMessageBox("Gagal memuat data dari server. Coba muat ulang halaman.");
@@ -158,6 +159,7 @@ function resetCurrentTransaction(type) {
         renderTablePembelian();
         clearBarangInputs('pembelian');
         document.getElementById('strukOutputPembelian').style.display = 'none';
+        document.getElementById('shareButtonsPembelian').style.display = 'none';
         const today = new Date();
         const formattedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
         document.getElementById('tanggalPembelian').value = formattedDate;
@@ -186,7 +188,9 @@ function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
         }
     }
 
-    if (sectionId === 'history') {
+    if (sectionId === 'dashboard') {
+        renderDashboard();
+    } else if (sectionId === 'history') {
         renderSalesHistory();
         renderPurchaseHistory();
     } else if (sectionId === 'pending') {
@@ -196,6 +200,32 @@ function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
     } else if (sectionId === 'stock') {
         generateStockReport();
     }
+}
+
+// --- Dashboard Management ---
+function renderDashboard() {
+    let totalSales = 0;
+    let totalProfit = 0;
+    let totalPurchases = 0;
+    let totalStockValue = 0;
+
+    salesHistory.forEach(struk => {
+        totalSales += struk.totalPenjualan || 0;
+        totalProfit += struk.totalLabaRugi || 0;
+    });
+
+    purchaseHistory.forEach(struk => {
+        totalPurchases += struk.totalPembelian || 0;
+    });
+
+    masterItems.forEach(item => {
+        totalStockValue += (item.stock || 0) * (item.purchasePrice || 0);
+    });
+
+    document.getElementById('dashboardTotalSales').innerText = formatRupiah(totalSales);
+    document.getElementById('dashboardTotalProfit').innerText = formatRupiah(totalProfit);
+    document.getElementById('dashboardTotalPurchases').innerText = formatRupiah(totalPurchases);
+    document.getElementById('dashboardTotalStockValue').innerText = formatRupiah(totalStockValue);
 }
 
 // --- Penjualan Management ---
@@ -225,7 +255,7 @@ function tambahAtauUpdateBarangPenjualan() {
             currentItems[itemIndex] = { ...currentItems[itemIndex], nama: namaBarang, qty: jumlahKuantitas, hargaSatuan: hargaSatuan, hargaBeli: hargaBeli, jumlah: jumlah, labaRugi: labaRugi };
         }
         editingItemId = null;
-        document.getElementById('btnAddUpdatePenjualan').innerText = 'Tambah Barang';
+        document.getElementById('btnAddUpdatePenjualan').innerText = 'Update Barang';
         document.getElementById('btnCancelEditPenjualan').style.display = 'none';
     } else {
         itemCounter++;
@@ -340,8 +370,9 @@ async function selesaikanPembayaran() {
 
     renderStrukPreviewPenjualan(newStruk);
     document.getElementById('printerCard').style.display = 'block';
-    showMessageBox('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!');
-    resetCurrentTransaction('penjualan');
+    showMessageBox('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', false, () => {
+        resetCurrentTransaction('penjualan');
+    });
 }
 
 function renderStrukPreviewPenjualan(strukData) {
@@ -363,7 +394,17 @@ function renderStrukPreviewPenjualan(strukData) {
 }
 
 function cetakStruk() {
+    const elementsToHide = document.querySelectorAll('header, .mobile-nav, .content-section:not(.active), .action-buttons, .search-icon-btn, button:not(#printButton), input, label, table thead');
+    elementsToHide.forEach(el => { el.style.display = 'none'; });
+
+    document.body.style.backgroundColor = 'white';
+    document.querySelector('#penjualanSection').style.boxShadow = 'none';
+
     window.print();
+
+    elementsToHide.forEach(el => { el.style.display = ''; });
+    document.body.style.backgroundColor = '';
+    document.querySelector('#penjualanSection').style.boxShadow = '';
 }
 
 function shareViaWhatsAppPenjualan() {
@@ -398,8 +439,9 @@ async function simpanTransaksiPending() {
     };
     pendingSales.push(newPendingTransaction);
     await saveDataToFirestore();
-    showMessageBox('Transaksi berhasil disimpan sebagai pending!');
-    resetCurrentTransaction('penjualan');
+    showMessageBox('Transaksi berhasil disimpan sebagai pending!', false, () => {
+        resetCurrentTransaction('penjualan');
+    });
 }
 
 // --- Pembelian Management ---
@@ -441,7 +483,7 @@ async function tambahAtauUpdateBarangPembelian() {
             }
         }
         editingItemId = null;
-        document.getElementById('btnAddUpdatePembelian').innerText = 'Tambah Barang';
+        document.getElementById('btnAddUpdatePembelian').innerText = 'Update Barang';
         document.getElementById('btnCancelEditPembelian').style.display = 'none';
     } else {
         itemCounter++;
@@ -555,8 +597,10 @@ async function simpanNotaPembelian() {
     await saveDataToFirestore();
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
-    showMessageBox('Nota pembelian berhasil disimpan!');
-    resetCurrentTransaction('pembelian');
+    document.getElementById('shareButtonsPembelian').style.display = 'flex';
+    showMessageBox('Nota pembelian berhasil disimpan!', false, () => {
+        resetCurrentTransaction('pembelian');
+    });
 }
 
 function renderStrukPreviewPembelian(strukData) {
@@ -574,7 +618,7 @@ function renderStrukPreviewPembelian(strukData) {
     strukHTML += `<hr class="my-2 border-dashed border-gray-400">`;
     strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPembelian)}</span></p>`;
     
-    document.getElementById('strukOutputPembelian').innerHTML = strukHTML;
+    document.getElementById('strukContentPembelian').innerHTML = strukHTML;
 }
 
 function shareViaWhatsAppPembelian() {
@@ -954,13 +998,16 @@ function generateProfitLossReport() {
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
     const filterItemName = document.getElementById('filterItemName').value.toLowerCase();
+    
     let filteredSalesHistory = salesHistory.filter(struk => {
         const strukDate = struk.tanggal;
         return (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
     });
+    
     if (filterItemName) {
         filteredSalesHistory = filteredSalesHistory.filter(struk => struk.items.some(item => item.nama.toLowerCase().includes(filterItemName)));
     }
+    
     const dailyProfitLoss = {};
     filteredSalesHistory.forEach(struk => {
         const date = struk.tanggal;
@@ -970,9 +1017,19 @@ function generateProfitLossReport() {
         dailyProfitLoss[date].totalHargaBeli += totalBeliTransaksi;
         dailyProfitLoss[date].labaRugi += struk.totalLabaRugi;
     });
+
     const dailyProfitLossList = document.getElementById('dailyProfitLossList');
     dailyProfitLossList.innerHTML = '';
     let overallTotalFilteredProfitLoss = 0;
+    
+    // Tampilkan nama barang yang difilter jika ada
+    const reportTitle = document.querySelector('#profitLossSection h3');
+    if (filterItemName) {
+        reportTitle.innerText = `Rugi Laba Harian (Barang: ${filterItemName})`;
+    } else {
+        reportTitle.innerText = `Rugi Laba Harian`;
+    }
+
     Object.keys(dailyProfitLoss).sort().forEach(date => {
         const data = dailyProfitLoss[date];
         const row = dailyProfitLossList.insertRow();
@@ -985,6 +1042,49 @@ function generateProfitLossReport() {
     });
     if (Object.keys(dailyProfitLoss).length === 0) dailyProfitLossList.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Tidak ada data.</td></tr>';
     document.getElementById('totalFilteredProfitLoss').innerText = formatRupiah(overallTotalFilteredProfitLoss);
+}
+
+function shareProfitLossViaWhatsApp() {
+    const startDate = document.getElementById('filterStartDate').value;
+    const endDate = document.getElementById('filterEndDate').value;
+    const filterItemName = document.getElementById('filterItemName').value.trim();
+
+    let message = `*Laporan Rugi Laba*\n`;
+    if (startDate && endDate) {
+        message += `Periode: ${startDate} s/d ${endDate}\n`;
+    }
+    if (filterItemName) {
+        message += `Nama Barang: ${filterItemName}\n`;
+    }
+    message += `\n`;
+    
+    // Ambil data dari tabel
+    const reportTable = document.getElementById('dailyProfitLossList');
+    for (let i = 0; i < reportTable.rows.length; i++) {
+        const row = reportTable.rows[i];
+        if (row.cells.length > 1) { // Skip empty rows
+            const date = row.cells[0].innerText;
+            const labaRugi = row.cells[3].innerText;
+            message += `Tanggal ${date}: ${labaRugi}\n`;
+        }
+    }
+
+    const totalProfit = document.getElementById('totalFilteredProfitLoss').innerText;
+    message += `\n*TOTAL LABA/RUGI: ${totalProfit}*\n`;
+    message += `\n_Dibuat dengan Aplikasi Nota & Stok_`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+}
+
+function downloadProfitLossPDF() {
+    // Sembunyikan elemen-elemen yang tidak perlu
+    const elementsToHide = document.querySelectorAll('header, .mobile-nav, .filter-controls, .report-header .flex, .search-icon-btn');
+    elementsToHide.forEach(el => { el.style.display = 'none'; });
+
+    window.print();
+
+    // Kembalikan elemen setelah cetak
+    elementsToHide.forEach(el => { el.style.display = ''; });
 }
 
 // Laporan Stok Barang
@@ -1067,7 +1167,7 @@ function showMessageBox(message, isConfirm = false, onConfirm = null) {
     } else {
         confirmBtn.style.display = 'inline-block';
         cancelBtn.style.display = 'none';
-        confirmBtn.onclick = () => closeMessageBox();
+        confirmBtn.onclick = () => { closeMessageBox(); if (onConfirm) onConfirm(); };
     }
     modal.style.display = 'flex';
 }
