@@ -123,6 +123,21 @@ input[type="number"] {
   display: block;
 }
 
+/* Gaya untuk notifikasi non-blokir */
+.temporary-alert {
+  position: fixed;
+  bottom: 70px;
+  right: 10px;
+  background-color: #22c55e;
+  color: white;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 1000;
+  transition: opacity 0.5s ease-in-out;
+  opacity: 0.9;
+}
+
 /* Media Queries for Responsiveness */
 @media (max-width: 768px) {
   body {
@@ -141,12 +156,10 @@ input[type="number"] {
 
 /* Print-specific styles for reports and notes */
 @media print {
-  body > *:not(#profitLossSection),
-  body > *:not(#penjualanSection),
-  body > *:not(#pembelianSection) {
+  body > *:not(.main-content-wrapper.active) {
       display: none !important;
   }
-  #profitLossSection, #penjualanSection, #pembelianSection {
+  .main-content-wrapper.active {
       display: block !important;
       position: absolute;
       top: 0;
@@ -155,16 +168,28 @@ input[type="number"] {
       margin: 0;
       padding: 0;
       box-shadow: none !important;
+      background: white;
   }
-
-  #profitLossSection .report-table-container,
-  #profitLossSection .report-summary,
-  #penjualanSection .main-content-wrapper,
-  #pembelianSection .main-content-wrapper {
-      box-shadow: none !important;
-  }
-
-  .mobile-nav, header, .action-buttons, button, input, label, .filter-controls, .report-header .flex, .search-icon-btn, .qty-price-group {
+  .main-content-wrapper.active .filter-controls,
+  .main-content-wrapper.active .report-header .flex,
+  .main-content-wrapper.active button {
       display: none !important;
+  }
+  
+  .main-content-wrapper.active .report-table-container {
+      overflow-x: visible;
+  }
+  .main-content-wrapper.active table {
+      width: 100%;
+      table-layout: fixed;
+  }
+  .main-content-wrapper.active th,
+  .main-content-wrapper.active td {
+      padding: 8px;
+      border: 1px solid #000;
+  }
+  .main-content-wrapper.active thead,
+  .main-content-wrapper.active tbody {
+      display: table-row-group;
   }
 }
