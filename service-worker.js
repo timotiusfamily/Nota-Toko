@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aplikasi-nota-v1';
+const CACHE_NAME = 'aplikasi-nota-v2';
 const urlsToCache = [
   '/',
   '/index.html',
