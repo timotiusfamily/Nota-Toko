@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aplikasi Nota & Stok</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1f2937">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
@@ -142,7 +144,7 @@
     <div id="printerCard" class="mt-8 pt-4 border-t border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 shadow-inner" style="display: none;">
         <h2 class="text-lg font-bold text-center text-gray-900 mb-4">Cetak Struk</h2>
         <div id="strukOutputPenjualan" class="mb-4"></div>
-        <div class="flex flex-col gap-4">
+        <div id="shareButtonsPenjualan" class="flex flex-col gap-4">
             <button onclick="cetakStruk()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200">
                 <i class="fas fa-print mr-2"></i> Cetak Struk
             </button>
@@ -223,7 +225,7 @@
             <div id="strukItemsPembelian" class="mb-4"></div>
             <p class="text-right text-lg font-bold text-gray-900" id="strukGrandTotalPembelianPreview"></p>
         </div>
-        <div id="shareButtonsPembelian" class="flex justify-center gap-4 mt-6" style="display: none;">
+        <div id="shareButtonsPembelian" class="flex justify-center gap-4 mt-6">
             <button onclick="shareViaWhatsAppPembelian()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200">
                 <i class="fab fa-whatsapp mr-2"></i> Bagikan Via WhatsApp
             </button>
@@ -325,7 +327,7 @@
 
 <div class="main-content-wrapper w-full p-6 bg-white rounded-xl shadow-lg mb-5 content-section" id="profitLossSection">
     <h2 class="text-2xl font-extrabold text-center text-gray-900 mb-6">Laporan Rugi Laba</h2>
-    <div class="flex flex-wrap gap-3 mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+    <div class="flex flex-wrap gap-3 mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50 filter-controls">
         <div class="flex-1 min-w-[120px]">
             <label for="filterStartDate" class="block text-gray-700 text-sm mb-1">Dari Tanggal:</label>
             <input type="date" id="filterStartDate" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
@@ -341,8 +343,8 @@
         <button onclick="generateProfitLossReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 self-end">Filter Laporan</button>
     </div>
     
-    <div class="flex justify-between items-center my-4">
-        <h3 class="text-xl font-bold text-gray-900">Rugi Laba Harian</h3>
+    <div class="flex justify-between items-center my-4 report-header">
+        <h3 id="profitLossReportTitle" class="text-xl font-bold text-gray-900">Rugi Laba Harian</h3>
         <div class="flex gap-2">
             <button onclick="shareProfitLossViaWhatsApp()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
                 <i class="fab fa-whatsapp"></i> Share
@@ -441,6 +443,7 @@
 </div>
 
 <script src="script.js"></script>
+<script src="service-worker.js"></script>
 
 </body>
 </html>
