@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         if (user) {
             userId = user.uid;
             
-            // Deklarasikan variabel secara lokal jika tidak ada.
+            // Inisialisasi variabel untuk memastikan tidak ada kesalahan "is not defined"
             salesHistory = [];
             purchaseHistory = [];
             pendingSales = [];
@@ -59,7 +59,6 @@ async function loadDataFromFirestore() {
             purchaseHistory = data.purchaseHistory || [];
             pendingSales = data.pendingSales || [];
         } else {
-            // Data belum ada, inisialisasi kosong
             console.log("No data found for user, initializing new data.");
         }
         renderMasterItems();
