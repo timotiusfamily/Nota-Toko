@@ -151,6 +151,9 @@
             <button onclick="shareViaWhatsAppPenjualan()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200">
                 <i class="fab fa-whatsapp mr-2"></i> Bagikan Via WhatsApp
             </button>
+             <button onclick="printBluetooth()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
+                <i class="fas fa-bluetooth-b mr-2"></i> Cetak Bluetooth
+            </button>
         </div>
     </div>
 </div>
@@ -265,6 +268,23 @@
 
 <div class="main-content-wrapper w-full p-6 bg-white rounded-xl shadow-lg mb-5 content-section" id="historySection">
     <h2 class="text-2xl font-extrabold text-center text-gray-900 mb-6">Riwayat Transaksi</h2>
+    
+    <div class="flex flex-wrap gap-3 mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+        <div class="flex-1 min-w-[120px]">
+            <label for="historyFilterStartDate" class="block text-gray-700 text-sm mb-1">Dari Tanggal:</label>
+            <input type="date" id="historyFilterStartDate" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div class="flex-1 min-w-[120px]">
+            <label for="historyFilterEndDate" class="block text-gray-700 text-sm mb-1">Sampai Tanggal:</label>
+            <input type="date" id="historyFilterEndDate" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div class="flex-1 min-w-[120px]">
+            <label for="historyFilterName" class="block text-gray-700 text-sm mb-1">Nama Pembeli/Supplier:</label>
+            <input type="text" id="historyFilterName" placeholder="Cari nama..." class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <button onclick="filterHistory()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 self-end">Filter Riwayat</button>
+    </div>
+
     <h3 class="text-xl font-bold text-gray-900 mb-4">Riwayat Penjualan</h3>
     <div class="overflow-x-auto mb-6 rounded-lg shadow-md">
         <table class="min-w-full bg-white">
