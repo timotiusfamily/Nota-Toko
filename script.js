@@ -11,6 +11,19 @@ let editingItemId = null;
 let masterItems = [];
 let userId = null;
 
+// --- PWA Service Worker Registration ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(registration => {
+        console.log('Service Worker registered: ', registration);
+      })
+      .catch(registrationError => {
+        console.log('Service Worker registration failed: ', registrationError);
+      });
+  });
+}
+
 // --- Initialization on DOMContentLoaded ---
 document.addEventListener('DOMContentLoaded', (event) => {
     // Cek status autentikasi Firebase
@@ -370,9 +383,19 @@ async function selesaikanPembayaran() {
 
     renderStrukPreviewPenjualan(newStruk);
     document.getElementById('printerCard').style.display = 'block';
-    showMessageBox('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', false, () => {
-        resetCurrentTransaction('penjualan');
-    });
+    
+    // Tampilkan notifikasi non-blokir
+    const alertDiv = document.createElement('div');
+    alertDiv.classList.add('transaction-alert');
+    alertDiv.innerText = 'Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!';
+    document.body.appendChild(alertDiv);
+    
+    // Hapus notifikasi setelah beberapa saat, tapi struk tetap ada
+    setTimeout(() => {
+        if (document.body.contains(alertDiv)) {
+            document.body.removeChild(alertDiv);
+        }
+    }, 3000);
 }
 
 function renderStrukPreviewPenjualan(strukData) {
@@ -439,9 +462,8 @@ async function simpanTransaksiPending() {
     };
     pendingSales.push(newPendingTransaction);
     await saveDataToFirestore();
-    showMessageBox('Transaksi berhasil disimpan sebagai pending!', false, () => {
-        resetCurrentTransaction('penjualan');
-    });
+    showMessageBox('Transaksi berhasil disimpan sebagai pending!');
+    resetCurrentTransaction('penjualan');
 }
 
 // --- Pembelian Management ---
@@ -460,8 +482,6 @@ async function tambahAtauUpdateBarangPembelian() {
         return;
     }
     
-    document.getElementById('strukOutputPembelian').style.display = 'none';
-
     const jumlah = jumlahKuantitas * hargaBeli;
     const masterItem = masterItems.find(mi => mi.name.toLowerCase() === namaBarang.toLowerCase());
 
@@ -597,9 +617,10 @@ async function simpanNotaPembelian() {
     await saveDataToFirestore();
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
-    document.getElementById('shareButtonsPembelian').style.display = 'flex';
+    
     showMessageBox('Nota pembelian berhasil disimpan!', false, () => {
         resetCurrentTransaction('pembelian');
+        renderDashboard();
     });
 }
 
@@ -619,6 +640,7 @@ function renderStrukPreviewPembelian(strukData) {
     strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPembelian)}</span></p>`;
     
     document.getElementById('strukContentPembelian').innerHTML = strukHTML;
+    document.getElementById('shareButtonsPembelian').style.display = 'flex';
 }
 
 function shareViaWhatsAppPembelian() {
@@ -1022,10 +1044,9 @@ function generateProfitLossReport() {
     dailyProfitLossList.innerHTML = '';
     let overallTotalFilteredProfitLoss = 0;
     
-    // Tampilkan nama barang yang difilter jika ada
-    const reportTitle = document.querySelector('#profitLossSection h3');
+    const reportTitle = document.getElementById('profitLossReportTitle');
     if (filterItemName) {
-        reportTitle.innerText = `Rugi Laba Harian (Barang: ${filterItemName})`;
+        reportTitle.innerText = `Rugi Laba Harian (Barang: ${document.getElementById('filterItemName').value})`;
     } else {
         reportTitle.innerText = `Rugi Laba Harian`;
     }
@@ -1058,11 +1079,10 @@ function shareProfitLossViaWhatsApp() {
     }
     message += `\n`;
     
-    // Ambil data dari tabel
     const reportTable = document.getElementById('dailyProfitLossList');
     for (let i = 0; i < reportTable.rows.length; i++) {
         const row = reportTable.rows[i];
-        if (row.cells.length > 1) { // Skip empty rows
+        if (row.cells.length > 1) { 
             const date = row.cells[0].innerText;
             const labaRugi = row.cells[3].innerText;
             message += `Tanggal ${date}: ${labaRugi}\n`;
@@ -1077,14 +1097,7 @@ function shareProfitLossViaWhatsApp() {
 }
 
 function downloadProfitLossPDF() {
-    // Sembunyikan elemen-elemen yang tidak perlu
-    const elementsToHide = document.querySelectorAll('header, .mobile-nav, .filter-controls, .report-header .flex, .search-icon-btn');
-    elementsToHide.forEach(el => { el.style.display = 'none'; });
-
     window.print();
-
-    // Kembalikan elemen setelah cetak
-    elementsToHide.forEach(el => { el.style.display = ''; });
 }
 
 // Laporan Stok Barang
