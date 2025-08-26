@@ -475,7 +475,7 @@ async function tambahAtauUpdateBarangPembelian() {
     }
     
     const jumlah = jumlahKuantitas * hargaBeli;
-    const masterItem = masterItems.find(mi => mi.name.toLowerCase() === namaBarang.toLowerCase());
+    const masterItemIndex = masterItems.findIndex(mi => mi.name.toLowerCase() === namaBarang.toLowerCase());
 
     if (editingItemId !== null) {
         const itemIndex = currentItems.findIndex(item => item.id === editingItemId);
@@ -488,7 +488,8 @@ async function tambahAtauUpdateBarangPembelian() {
 
             currentItems[itemIndex] = { ...currentItems[itemIndex], nama: namaBarang, qty: jumlahKuantitas, hargaBeli: hargaBeli, jumlah: jumlah };
             
-            if(masterItem) {
+            if(masterItemIndex > -1) {
+                const masterItem = masterItems[masterItemIndex];
                 const totalOldValue = (masterItem.stock) * masterItem.purchasePrice;
                 masterItem.stock += jumlahKuantitas;
                 masterItem.purchasePrice = (totalOldValue + (jumlahKuantitas * hargaBeli)) / (masterItem.stock);
@@ -502,7 +503,8 @@ async function tambahAtauUpdateBarangPembelian() {
         const newItem = { id: itemCounter, nama: namaBarang, qty: jumlahKuantitas, hargaBeli: hargaBeli, jumlah: jumlah, hargaJual: hargaJual };
         currentItems.push(newItem);
 
-        if (masterItem) {
+        if (masterItemIndex > -1) {
+            const masterItem = masterItems[masterItemIndex];
             const oldStock = masterItem.stock || 0;
             const oldPurchasePrice = masterItem.purchasePrice || 0;
             const newStock = oldStock + jumlahKuantitas;
@@ -610,13 +612,10 @@ async function simpanNotaPembelian() {
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
     
+    // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
     
-    // Hapus notifikasi setelah beberapa saat, tapi struk tetap ada
-    setTimeout(() => {
-        resetCurrentTransaction('pembelian');
-        renderDashboard();
-    }, 3000);
+    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
 }
 
 function renderStrukPreviewPembelian(strukData) {
@@ -825,7 +824,7 @@ async function clearSalesHistory() {
         salesHistory = [];
         await saveDataToFirestore();
         renderSalesHistory();
-        showMessageBox('Semua riwayat penjualan telah dihapus.');
+        showTemporaryAlert('Semua riwayat penjualan telah dihapus.', 'green');
     });
 }
 async function clearPurchaseHistory() {
@@ -833,7 +832,7 @@ async function clearPurchaseHistory() {
         purchaseHistory = [];
         await saveDataToFirestore();
         renderPurchaseHistory();
-        showMessageBox('Semua riwayat pembelian telah dihapus.');
+        showTemporaryAlert('Semua riwayat pembelian telah dihapus.', 'green');
     });
 }
 async function clearPendingSales() {
@@ -841,7 +840,7 @@ async function clearPendingSales() {
         pendingSales = [];
         await saveDataToFirestore();
         renderPendingSales();
-        showMessageBox('Semua transaksi pending telah dihapus.');
+        showTemporaryAlert('Semua transaksi pending telah dihapus.', 'green');
     });
 }
 
@@ -909,7 +908,7 @@ function viewHistoryStruk(id, type) {
             renderTablePenjualan();
             renderStrukPreviewPenjualan(strukToView);
             document.getElementById('printerCard').style.display = 'block';
-            showMessageBox(`Menampilkan struk penjualan riwayat dengan ID: ${strukToView.id}`);
+            showTemporaryAlert(`Menampilkan struk penjualan riwayat dengan ID: ${strukToView.id}`, 'green');
             showSection('penjualan', document.getElementById('navPenjualan'), true);
         }
     } else if (type === 'pembelian') {
@@ -923,7 +922,7 @@ function viewHistoryStruk(id, type) {
             renderTablePembelian();
             renderStrukPreviewPembelian(strukToView);
             document.getElementById('strukOutputPembelian').style.display = 'block';
-            showMessageBox(`Menampilkan nota pembelian riwayat dengan ID: ${strukToView.id}`);
+            showTemporaryAlert(`Menampilkan nota pembelian riwayat dengan ID: ${strukToView.id}`, 'green');
             showSection('pembelian', document.getElementById('navPembelian'), true);
         }
     }
@@ -941,7 +940,7 @@ async function deleteHistoryStruk(id, type) {
             }
             salesHistory = salesHistory.filter(s => s.id !== id);
             renderSalesHistory();
-            showMessageBox('Struk penjualan berhasil dihapus.');
+            showTemporaryAlert('Struk penjualan berhasil dihapus.', 'green');
         } else if (type === 'pembelian') {
             const deletedStruk = purchaseHistory.find(s => s.id === id);
             if (deletedStruk && deletedStruk.items) {
@@ -952,7 +951,7 @@ async function deleteHistoryStruk(id, type) {
             }
             purchaseHistory = purchaseHistory.filter(s => s.id !== id);
             renderPurchaseHistory();
-            showMessageBox('Nota pembelian berhasil dihapus.');
+            showTemporaryAlert('Nota pembelian berhasil dihapus.', 'green');
         }
         await saveDataToFirestore();
         renderMasterItems();
