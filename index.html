@@ -45,7 +45,29 @@
 
 <div class="main-content-area mt-[80px] w-full max-w-xl p-2 md:p-6 flex flex-col items-center">
 
-<div class="main-content-wrapper w-full p-6 bg-white rounded-xl shadow-lg mb-5 content-section active" id="penjualanSection">
+<div class="main-content-wrapper w-full p-6 bg-white rounded-xl shadow-lg mb-5 content-section active" id="dashboardSection">
+    <h1 class="text-2xl font-extrabold text-center text-gray-900 mb-6">Ringkasan Dashboard</h1>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-blue-100 p-4 rounded-lg shadow-md">
+            <h3 class="text-lg font-bold text-blue-800">Total Penjualan</h3>
+            <p id="dashboardTotalSales" class="text-3xl font-extrabold text-blue-900">Rp. 0</p>
+        </div>
+        <div class="bg-green-100 p-4 rounded-lg shadow-md">
+            <h3 class="text-lg font-bold text-green-800">Total Laba/Rugi</h3>
+            <p id="dashboardTotalProfit" class="text-3xl font-extrabold text-green-900">Rp. 0</p>
+        </div>
+        <div class="bg-yellow-100 p-4 rounded-lg shadow-md">
+            <h3 class="text-lg font-bold text-yellow-800">Total Pembelian</h3>
+            <p id="dashboardTotalPurchases" class="text-3xl font-extrabold text-yellow-900">Rp. 0</p>
+        </div>
+        <div class="bg-gray-100 p-4 rounded-lg shadow-md">
+            <h3 class="text-lg font-bold text-gray-800">Nilai Stok Saat Ini</h3>
+            <p id="dashboardTotalStockValue" class="text-3xl font-extrabold text-gray-900">Rp. 0</p>
+        </div>
+    </div>
+</div>
+
+<div class="main-content-wrapper w-full p-6 bg-white rounded-xl shadow-lg mb-5 content-section" id="penjualanSection">
     <h1 class="text-2xl font-extrabold text-center text-gray-900 mb-6">Aplikasi Nota Penjualan</h1>
     <div class="mb-4">
         <label for="namaToko" class="block text-gray-700 text-sm mb-2">Nama Toko:</label>
@@ -195,13 +217,13 @@
     </div>
     <div id="strukOutputPembelian" class="mt-8 pt-4 border-t border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 shadow-inner" style="display: none;">
         <h2 class="text-lg font-bold text-center text-gray-900 mb-4">Preview Nota Pembelian</h2>
-        <div class="flex flex-col gap-4">
+        <div id="strukContentPembelian">
             <p id="strukNamaSupplierPembelian" class="text-center text-gray-700 mb-1"></p>
             <p id="strukTanggalPembelianPreview" class="text-center text-gray-700 mb-4"></p>
             <div id="strukItemsPembelian" class="mb-4"></div>
             <p class="text-right text-lg font-bold text-gray-900" id="strukGrandTotalPembelianPreview"></p>
         </div>
-        <div class="flex justify-center gap-4 mt-6">
+        <div id="shareButtonsPembelian" class="flex justify-center gap-4 mt-6" style="display: none;">
             <button onclick="shareViaWhatsAppPembelian()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200">
                 <i class="fab fa-whatsapp mr-2"></i> Bagikan Via WhatsApp
             </button>
@@ -318,7 +340,19 @@
         </div>
         <button onclick="generateProfitLossReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 self-end">Filter Laporan</button>
     </div>
-    <h3 class="text-xl font-bold text-gray-900 mb-4">Rugi Laba Harian</h3>
+    
+    <div class="flex justify-between items-center my-4">
+        <h3 class="text-xl font-bold text-gray-900">Rugi Laba Harian</h3>
+        <div class="flex gap-2">
+            <button onclick="shareProfitLossViaWhatsApp()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
+                <i class="fab fa-whatsapp"></i> Share
+            </button>
+            <button onclick="downloadProfitLossPDF()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
+                <i class="fas fa-file-pdf"></i> PDF
+            </button>
+        </div>
+    </div>
+
     <div class="report-table-container overflow-x-auto rounded-lg shadow-md mb-6">
         <table class="min-w-full bg-white">
             <thead class="bg-gray-50">
@@ -396,7 +430,8 @@
 </div>
 
 <div class="mobile-nav flex justify-around items-center">
-    <button id="navPenjualan" class="active" onclick="showSection('penjualan', this)"><i class="fas fa-cash-register"></i><span class="nav-label">Jual</span></button>
+    <button id="navDashboard" onclick="showSection('dashboard', this)" class="active"><i class="fas fa-chart-bar"></i><span class="nav-label">Dash</span></button>
+    <button id="navPenjualan" onclick="showSection('penjualan', this)"><i class="fas fa-cash-register"></i><span class="nav-label">Jual</span></button>
     <button id="navPembelian" onclick="showSection('pembelian', this)"><i class="fas fa-shopping-basket"></i><span class="nav-label">Beli</span></button>
     <button id="navMaster" onclick="showSection('master', this)"><i class="fas fa-boxes"></i><span class="nav-label">Master</span></button>
     <button id="navPending" onclick="showSection('pending', this)"><i class="fas fa-hourglass-half"></i><span class="nav-label">Pending</span></button>
