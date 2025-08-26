@@ -1,0 +1,149 @@
+/* Custom styles for elegance and overrides for Tailwind where necessary */
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            font-weight: bold; /* All text bold as requested */
+        }
+
+        /* Hide number input arrows */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        /* Specific styles for quantity and price inputs to remove inner borders */
+        .qty-price-group input[type="number"] {
+            border: none !important; /* Force no border */
+            box-shadow: none !important; /* Force no shadow */
+            background-color: transparent !important; /* Transparent background */
+            border-bottom: 1px solid #d1d5db !important; /* Light gray bottom border */
+            border-radius: 0 !important; /* No border radius for clean bottom line */
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        /* Modal specific styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+        }
+        .modal-content {
+            background-color: #fefefe;
+            padding: 20px;
+            border-radius: 0.75rem; /* rounded-lg */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* Mobile navigation adjustments */
+        .mobile-nav {
+            display: none; /* Hidden by default, shown by media query */
+            width: 100%;
+            background-color: white;
+            padding: 0.5rem 0;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            z-index: 999;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .mobile-nav button {
+            background-color: transparent;
+            color: #6b7280; /* gray-500 */
+            border: none;
+            padding: 0.5rem 0.25rem;
+            margin: 0;
+            border-radius: 0;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: color 0.3s ease;
+            flex-direction: column;
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+            min-width: 60px;
+        }
+        .mobile-nav button i {
+            font-size: 1.4em;
+            margin-bottom: 0.25rem;
+        }
+        .mobile-nav button.active {
+            color: #22c55e; /* green-500 */
+        }
+        .mobile-nav button:hover:not(.active) {
+            color: #3b82f6; /* blue-500 */
+        }
+        .mobile-nav button span.nav-label {
+            display: block;
+        }
+
+        /* Content sections for mobile nav */
+        .content-section {
+            display: none;
+            width: 100%;
+        }
+        .content-section.active {
+            display: block;
+        }
+
+        /* Media Queries for Responsiveness */
+        @media (max-width: 768px) {
+            .mobile-nav {
+                display: flex;
+            }
+            body {
+                padding-bottom: 60px; /* Space for fixed bottom nav */
+            }
+            .main-content-wrapper {
+                margin-bottom: 60px; /* Adjust margin for fixed nav */
+            }
+        }
+        @media (max-width: 480px) {
+            .mobile-nav button span.nav-label {
+                display: none;
+            }
+            .mobile-nav button i {
+                font-size: 1.6em;
+            }
+            .mobile-nav {
+                padding: 0.75rem 0;
+            }
+        }
+
