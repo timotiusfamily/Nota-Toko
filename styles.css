@@ -154,42 +154,90 @@ input[type="number"] {
   /* Hapus aturan yang menyembunyikan mobile-nav di desktop */
 }
 
-/* Print-specific styles for reports and notes */
+/* --- Perbaikan dan Penyesuaian Gaya Cetak untuk Printer Thermal 57mm --- */
 @media print {
-  body > *:not(.main-content-wrapper.active) {
-      display: none !important;
-  }
-  .main-content-wrapper.active {
-      display: block !important;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      box-shadow: none !important;
-      background: white;
-  }
-  .main-content-wrapper.active .filter-controls,
-  .main-content-wrapper.active .report-header .flex,
-  .main-content-wrapper.active button {
-      display: none !important;
-  }
-  
-  .main-content-wrapper.active .report-table-container {
-      overflow-x: visible;
-  }
-  .main-content-wrapper.active table {
-      width: 100%;
-      table-layout: fixed;
-  }
-  .main-content-wrapper.active th,
-  .main-content-wrapper.active td {
-      padding: 8px;
-      border: 1px solid #000;
-  }
-  .main-content-wrapper.active thead,
-  .main-content-wrapper.active tbody {
-      display: table-row-group;
-  }
+    /* Atur halaman cetak untuk printer thermal */
+    @page {
+        size: 57mm auto; /* Lebar 57mm, tinggi otomatis */
+        margin: 0; /* Hapus margin default */
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+        font-family: 'monospace', 'Courier New', monospace; /* Gunakan font monospasi untuk keseragaman lebar */
+    }
+
+    /* Sembunyikan semua elemen kecuali kontainer struk yang aktif */
+    body > *:not(.main-content-wrapper.active) {
+        display: none !important;
+    }
+    
+    /* Tampilkan hanya konten struk yang spesifik */
+    #penjualanSection.active .main-content-wrapper,
+    #pembelianSection.active .main-content-wrapper {
+        display: block !important;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 57mm;
+        max-width: 57mm;
+        padding: 5px; /* Kurangi padding agar tidak melebihi lebar */
+        box-shadow: none !important;
+        background: white;
+        margin: 0;
+    }
+
+    /* Sembunyikan elemen input dan tombol di dalam cetakan */
+    .main-content-wrapper.active .filter-controls,
+    .main-content-wrapper.active .report-header .flex,
+    .main-content-wrapper.active button,
+    .main-content-wrapper.active input,
+    .main-content-wrapper.active label,
+    .main-content-wrapper.active .total-row td:last-child,
+    .main-content-wrapper.active .total-row th:last-child,
+    .main-content-wrapper.active .action-buttons {
+        display: none !important;
+    }
+
+    /* Atur tata letak tabel agar rapi */
+    .main-content-wrapper.active table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+        font-size: 10px; /* Ukuran font lebih kecil agar muat */
+    }
+    .main-content-wrapper.active th,
+    .main-content-wrapper.active td {
+        padding: 2px 1px; /* Kurangi padding sel */
+        border: none;
+    }
+    .main-content-wrapper.active thead th {
+        border-bottom: 1px dashed black;
+    }
+    .main-content-wrapper.active tfoot th,
+    .main-content-wrapper.active tfoot td {
+        border-top: 1px dashed black;
+        font-weight: bold;
+    }
+    .main-content-wrapper.active .total-row td:first-child {
+        text-align: right;
+    }
+
+    /* Hapus bayangan dan latar belakang saat mencetak */
+    .main-content-wrapper.active .rounded-xl,
+    .main-content-wrapper.active .shadow-lg,
+    .main-content-wrapper.active .bg-white {
+        box-shadow: none !important;
+        background-color: transparent !important;
+    }
+    .main-content-wrapper.active .bg-gray-50 {
+        background-color: transparent !important;
+    }
+    .main-content-wrapper.active .py-2 {
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
+    }
 }

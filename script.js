@@ -1165,8 +1165,21 @@ function shareProfitLossViaWhatsApp() {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 }
 
+// Perbaikan untuk fungsi download PDF
 function downloadProfitLossPDF() {
-    window.print();
+    const element = document.getElementById('profitLossReportContainer');
+    html2pdf(element, {
+        margin: 10,
+        filename: `Laporan_Rugi_Laba_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).then(() => {
+        showTemporaryAlert('Laporan Rugi Laba berhasil diunduh!', 'green');
+    }).catch(error => {
+        console.error("PDF generation failed:", error);
+        showTemporaryAlert('Gagal mengunduh Laporan Rugi Laba PDF.', 'red');
+    });
 }
 
 // Laporan Stok Barang
@@ -1221,8 +1234,21 @@ function shareStockReportViaWhatsApp() {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 }
 
+// Perbaikan untuk fungsi download PDF
 function downloadStockReportPDF() {
-    window.print();
+    const element = document.getElementById('stockReportContainer');
+    html2pdf(element, {
+        margin: 10,
+        filename: `Laporan_Stok_Barang_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).then(() => {
+        showTemporaryAlert('Laporan Stok Barang berhasil diunduh!', 'green');
+    }).catch(error => {
+        console.error("PDF generation failed:", error);
+        showTemporaryAlert('Gagal mengunduh Laporan Stok Barang PDF.', 'red');
+    });
 }
 
 // Backup & Restore
