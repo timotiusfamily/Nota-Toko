@@ -384,10 +384,8 @@ async function selesaikanPembayaran() {
     renderStrukPreviewPenjualan(newStruk);
     document.getElementById('printerCard').style.display = 'block';
     
-    // Tampilkan notifikasi non-blokir
+    // Tampilkan notifikasi non-blokir tanpa menghapus struk
     showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', 'green');
-    
-    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
 }
 
 function renderStrukPreviewPenjualan(strukData) {
@@ -611,8 +609,8 @@ async function simpanNotaPembelian() {
     await saveDataToFirestore();
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
+    document.getElementById('shareButtonsPembelian').style.display = 'flex'; // Pastikan tombol muncul
     
-    // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
     
     // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
@@ -634,7 +632,6 @@ function renderStrukPreviewPembelian(strukData) {
     strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPembelian)}</span></p>`;
     
     document.getElementById('strukContentPembelian').innerHTML = strukHTML;
-    document.getElementById('shareButtonsPembelian').style.display = 'flex';
 }
 
 function shareViaWhatsAppPembelian() {
@@ -714,7 +711,7 @@ function deleteMasterItem(index) {
         await saveDataToFirestore();
         renderMasterItems();
         renderModalMasterItems();
-        showMessageBox('Barang master berhasil dihapus.');
+        showTemporaryAlert('Barang master berhasil dihapus.', 'green');
     });
 }
 
@@ -724,7 +721,7 @@ function clearMasterItems() {
         await saveDataToFirestore();
         renderMasterItems();
         renderModalMasterItems();
-        showMessageBox('Semua barang master telah dihapus.');
+        showTemporaryAlert('Semua barang master telah dihapus.', 'green');
     });
 }
 
@@ -1115,7 +1112,7 @@ function generateStockReport() {
 }
 
 function shareStockReportViaWhatsApp() {
-    const stockReportList = document.getElementById('stockReportList');
+    const stockReportTable = document.getElementById('stockReportList');
     const filteredName = document.getElementById('stockFilterItemName').value.trim();
     
     let message = `*Laporan Stok Barang*\n`;
@@ -1123,8 +1120,8 @@ function shareStockReportViaWhatsApp() {
         message += `Filter: ${filteredName}\n\n`;
     }
     
-    for (let i = 0; i < stockReportList.rows.length; i++) {
-        const row = stockReportList.rows[i];
+    for (let i = 0; i < stockReportTable.rows.length; i++) {
+        const row = stockReportTable.rows[i];
         const namaBarang = row.cells[0].innerText;
         const stok = row.cells[1].innerText;
         const hargaJual = row.cells[2].innerText;
