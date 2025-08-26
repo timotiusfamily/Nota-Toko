@@ -54,10 +54,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
             showSection('dashboard', document.getElementById('navDashboard'));
             document.getElementById('filterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('filterEndDate').value = formattedDate;
-
-            document.getElementById('historyFilterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-            document.getElementById('historyFilterEndDate').value = formattedDate;
-
         } else {
             window.location.href = 'login.html';
         }
@@ -389,6 +385,8 @@ async function selesaikanPembayaran() {
     
     // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', 'green');
+    
+    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
 }
 
 function renderStrukPreviewPenjualan(strukData) {
@@ -420,7 +418,56 @@ function cetakStruk() {
 
     elementsToHide.forEach(el => { el.style.display = ''; });
     document.body.style.backgroundColor = '';
-    document.querySelector('#penjualanSection').style.boxShadow = '';
+    document.querySelector('#penjualanSection').style.boxShadow = 'none';
+}
+
+// Tambahkan fitur cetak Bluetooth di sini
+async function printBluetooth() {
+    if (!navigator.bluetooth) {
+        showTemporaryAlert('Web Bluetooth API tidak didukung di browser ini. Mohon gunakan Chrome atau peramban yang mendukungnya.', 'red');
+        return;
+    }
+
+    try {
+        showTemporaryAlert('Mencari printer Bluetooth...', 'green');
+        
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }] // Ganti service UUID jika perlu
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb'); 
+        const characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+
+        showTemporaryAlert('Berhasil terhubung ke printer. Mengirim data...', 'green');
+
+        const lastStruk = salesHistory[salesHistory.length - 1];
+        if (!lastStruk) {
+            showTemporaryAlert('Tidak ada struk untuk dicetak.', 'red');
+            return;
+        }
+
+        let printData = `\n${lastStruk.toko || 'Nama Toko'}\n`;
+        printData += `Tanggal: ${lastStruk.tanggal} | Pembeli: ${lastStruk.pembeli}\n`;
+        printData += `--------------------------------\n`;
+        lastStruk.items.forEach(item => {
+            printData += `${item.nama} (${item.qty} x ${item.hargaSatuan}) = ${item.jumlah}\n`;
+        });
+        printData += `--------------------------------\n`;
+        printData += `TOTAL: ${lastStruk.totalPenjualan}\n\n`;
+        printData += `Terima kasih!\n\n\n`;
+
+        const encoder = new TextEncoder();
+        const data = encoder.encode(printData);
+
+        await characteristic.writeValue(data);
+        showTemporaryAlert('Data berhasil dikirim ke printer!', 'green');
+
+        server.disconnect();
+
+    } catch (error) {
+        console.error('Pencetakan Bluetooth Gagal:', error);
+        showTemporaryAlert('Pencetakan Bluetooth gagal: ' + error, 'red');
+    }
 }
 
 function shareViaWhatsAppPenjualan() {
@@ -612,12 +659,9 @@ async function simpanNotaPembelian() {
     await saveDataToFirestore();
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
-    document.getElementById('shareButtonsPembelian').style.display = 'flex'; // Pastikan tombol muncul
     
     // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
-    
-    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
 }
 
 function renderStrukPreviewPembelian(strukData) {
@@ -636,6 +680,7 @@ function renderStrukPreviewPembelian(strukData) {
     strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPembelian)}</span></p>`;
     
     document.getElementById('strukContentPembelian').innerHTML = strukHTML;
+    document.getElementById('shareButtonsPembelian').style.display = 'flex';
 }
 
 function shareViaWhatsAppPembelian() {
