@@ -249,11 +249,11 @@ function tambahAtauUpdateBarangPenjualan() {
     const hargaBeli = parseInt(document.getElementById('hargaBeliPenjualan').value || '0');
 
     if (!namaBarang || isNaN(jumlahKuantitas) || isNaN(hargaSatuan)) {
-        showMessageBox('Mohon lengkapi Nama Barang, Kuantitas, dan Harga Satuan.');
+        showTemporaryAlert('Mohon lengkapi Nama Barang, Kuantitas, dan Harga Satuan.', 'red');
         return;
     }
     if (jumlahKuantitas <= 0 || hargaSatuan < 0 || hargaBeli < 0) {
-        showMessageBox('Kuantitas dan Harga tidak boleh negatif atau nol.');
+        showTemporaryAlert('Kuantitas dan Harga tidak boleh negatif atau nol.', 'red');
         return;
     }
     
@@ -353,7 +353,7 @@ function renderTablePenjualan() {
 
 async function selesaikanPembayaran() {
     if (currentItems.length === 0) {
-        showMessageBox('Tambahkan barang terlebih dahulu.');
+        showTemporaryAlert('Tambahkan barang terlebih dahulu.', 'red');
         return;
     }
 
@@ -385,17 +385,9 @@ async function selesaikanPembayaran() {
     document.getElementById('printerCard').style.display = 'block';
     
     // Tampilkan notifikasi non-blokir
-    const alertDiv = document.createElement('div');
-    alertDiv.classList.add('transaction-alert');
-    alertDiv.innerText = 'Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!';
-    document.body.appendChild(alertDiv);
+    showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', 'green');
     
-    // Hapus notifikasi setelah beberapa saat, tapi struk tetap ada
-    setTimeout(() => {
-        if (document.body.contains(alertDiv)) {
-            document.body.removeChild(alertDiv);
-        }
-    }, 3000);
+    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
 }
 
 function renderStrukPreviewPenjualan(strukData) {
@@ -433,7 +425,7 @@ function cetakStruk() {
 function shareViaWhatsAppPenjualan() {
     const lastStruk = salesHistory[salesHistory.length - 1];
     if (!lastStruk) {
-        showMessageBox('Tidak ada struk untuk dibagikan.');
+        showTemporaryAlert('Tidak ada struk untuk dibagikan.', 'red');
         return;
     }
     let message = `*NOTA PENJUALAN*\n\n*${lastStruk.toko || 'Nama Toko'}*\nTanggal: ${lastStruk.tanggal}\nPembeli: ${lastStruk.pembeli}\n\n*Daftar Barang:*\n`;
@@ -446,7 +438,7 @@ function shareViaWhatsAppPenjualan() {
 
 async function simpanTransaksiPending() {
     if (currentItems.length === 0) {
-        showMessageBox('Tidak ada barang untuk disimpan.');
+        showTemporaryAlert('Tidak ada barang untuk disimpan.', 'red');
         return;
     }
     const tanggal = document.getElementById('tanggalPenjualan').value;
@@ -462,7 +454,7 @@ async function simpanTransaksiPending() {
     };
     pendingSales.push(newPendingTransaction);
     await saveDataToFirestore();
-    showMessageBox('Transaksi berhasil disimpan sebagai pending!');
+    showTemporaryAlert('Transaksi berhasil disimpan sebagai pending!', 'green');
     resetCurrentTransaction('penjualan');
 }
 
@@ -474,11 +466,11 @@ async function tambahAtauUpdateBarangPembelian() {
     const hargaJual = parseInt(document.getElementById('hargaJualPembelian').value);
 
     if (!namaBarang || isNaN(jumlahKuantitas) || isNaN(hargaBeli) || isNaN(hargaJual)) {
-        showMessageBox('Mohon lengkapi semua field: Nama Barang, Kuantitas, Harga Beli, dan Harga Jual.');
+        showTemporaryAlert('Mohon lengkapi semua field: Nama Barang, Kuantitas, Harga Beli, dan Harga Jual.', 'red');
         return;
     }
     if (jumlahKuantitas <= 0 || hargaBeli < 0 || hargaJual < 0) {
-        showMessageBox('Kuantitas dan Harga tidak boleh negatif atau nol.');
+        showTemporaryAlert('Kuantitas dan Harga tidak boleh negatif atau nol.', 'red');
         return;
     }
     
@@ -601,7 +593,7 @@ function renderTablePembelian() {
 
 async function simpanNotaPembelian() {
     if (currentItems.length === 0) {
-        showMessageBox('Tidak ada barang untuk disimpan.');
+        showTemporaryAlert('Tidak ada barang untuk disimpan.', 'red');
         return;
     }
     const tanggal = document.getElementById('tanggalPembelian').value;
@@ -618,10 +610,13 @@ async function simpanNotaPembelian() {
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
     
-    showMessageBox('Nota pembelian berhasil disimpan!', false, () => {
+    showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
+    
+    // Hapus notifikasi setelah beberapa saat, tapi struk tetap ada
+    setTimeout(() => {
         resetCurrentTransaction('pembelian');
         renderDashboard();
-    });
+    }, 3000);
 }
 
 function renderStrukPreviewPembelian(strukData) {
@@ -646,7 +641,7 @@ function renderStrukPreviewPembelian(strukData) {
 function shareViaWhatsAppPembelian() {
     const lastStruk = purchaseHistory[purchaseHistory.length - 1];
     if (!lastStruk) {
-        showMessageBox('Tidak ada nota untuk dibagikan.');
+        showTemporaryAlert('Tidak ada nota untuk dibagikan.', 'red');
         return;
     }
     const namaToko = document.getElementById('namaToko').value || 'Nama Toko';
@@ -999,7 +994,7 @@ async function loadPendingTransaction(id) {
         hitungUlangTotal('penjualan');
         renderTablePenjualan();
         showSection('penjualan', document.getElementById('navPenjualan'), true);
-        showMessageBox(`Transaksi pending dengan ID ${id} dimuat. Lanjutkan pembayaran.`);
+        showTemporaryAlert(`Transaksi pending dengan ID ${id} dimuat. Lanjutkan pembayaran.`, 'green');
         pendingSales = pendingSales.filter(t => t.id !== id);
         await saveDataToFirestore();
         renderPendingSales();
@@ -1011,7 +1006,7 @@ async function deletePendingTransaction(id) {
         pendingSales = pendingSales.filter(t => t.id !== id);
         await saveDataToFirestore();
         renderPendingSales();
-        showMessageBox('Transaksi pending berhasil dihapus.');
+        showTemporaryAlert('Transaksi pending berhasil dihapus.', 'green');
     });
 }
 
@@ -1120,10 +1115,46 @@ function generateStockReport() {
     });
 }
 
+function shareStockReportViaWhatsApp() {
+    const stockReportList = document.getElementById('stockReportList');
+    const filteredName = document.getElementById('stockFilterItemName').value.trim();
+    
+    let message = `*Laporan Stok Barang*\n`;
+    if (filteredName) {
+        message += `Filter: ${filteredName}\n\n`;
+    }
+    
+    for (let i = 0; i < stockReportList.rows.length; i++) {
+        const row = stockReportList.rows[i];
+        const namaBarang = row.cells[0].innerText;
+        const stok = row.cells[1].innerText;
+        const hargaJual = row.cells[2].innerText;
+        const hargaBeli = row.cells[3].innerText;
+        
+        message += `Nama: ${namaBarang}\n`;
+        message += `Stok: ${stok}\n`;
+        message += `Harga Jual: ${hargaJual}\n`;
+        message += `Harga Beli: ${hargaBeli}\n\n`;
+    }
+
+    message += `_Dibuat dengan Aplikasi Nota & Stok_`;
+
+    if (message.length > 2000) {
+        showTemporaryAlert('Laporan terlalu panjang untuk WhatsApp, mohon gunakan fitur PDF.', 'red');
+        return;
+    }
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+}
+
+function downloadStockReportPDF() {
+    window.print();
+}
+
 // Backup & Restore
 function backupMasterItems() {
     if (masterItems.length === 0) {
-        showMessageBox('Tidak ada barang master untuk di-backup.');
+        showTemporaryAlert('Tidak ada barang master untuk di-backup.', 'red');
         return;
     }
     const dataStr = JSON.stringify(masterItems, null, 2);
@@ -1136,7 +1167,7 @@ function backupMasterItems() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showMessageBox('Daftar barang master berhasil di-backup!');
+    showTemporaryAlert('Daftar barang master berhasil di-backup!', 'green');
 }
 
 function restoreMasterItems(event) {
@@ -1152,13 +1183,13 @@ function restoreMasterItems(event) {
                     await saveDataToFirestore();
                     renderMasterItems();
                     renderModalMasterItems();
-                    showMessageBox('Daftar barang master berhasil di-restore!');
+                    showTemporaryAlert('Daftar barang master berhasil di-restore!', 'green');
                 });
             } else {
-                showMessageBox('Format file JSON tidak valid.');
+                showTemporaryAlert('Format file JSON tidak valid.', 'red');
             }
         } catch (error) {
-            showMessageBox('Gagal membaca atau memproses file JSON. Error: ' + error.message);
+            showTemporaryAlert('Gagal membaca atau memproses file JSON. Error: ' + error.message, 'red');
         }
     };
     reader.readAsText(file);
@@ -1188,6 +1219,30 @@ function showMessageBox(message, isConfirm = false, onConfirm = null) {
 function closeMessageBox() {
     const modal = document.getElementById('customMessageBox');
     modal.style.display = 'none';
+}
+
+// Custom Temporary Alert
+function showTemporaryAlert(message, type) {
+    let alertDiv = document.querySelector('.temporary-alert');
+    if (!alertDiv) {
+        alertDiv = document.createElement('div');
+        alertDiv.classList.add('temporary-alert');
+        document.body.appendChild(alertDiv);
+    }
+    alertDiv.innerText = message;
+
+    if (type === 'green') {
+        alertDiv.style.backgroundColor = '#22c55e';
+    } else if (type === 'red') {
+        alertDiv.style.backgroundColor = '#ef4444';
+    }
+
+    alertDiv.style.opacity = '1';
+    
+    // Hilangkan alert setelah 3 detik
+    setTimeout(() => {
+        alertDiv.style.opacity = '0';
+    }, 3000);
 }
 
 function loadNamaToko() {
