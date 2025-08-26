@@ -384,8 +384,10 @@ async function selesaikanPembayaran() {
     renderStrukPreviewPenjualan(newStruk);
     document.getElementById('printerCard').style.display = 'block';
     
-    // Tampilkan notifikasi non-blokir tanpa menghapus struk
+    // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', 'green');
+    
+    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
 }
 
 function renderStrukPreviewPenjualan(strukData) {
@@ -609,8 +611,8 @@ async function simpanNotaPembelian() {
     await saveDataToFirestore();
     renderStrukPreviewPembelian(newStruk);
     document.getElementById('strukOutputPembelian').style.display = 'block';
-    document.getElementById('shareButtonsPembelian').style.display = 'flex'; // Pastikan tombol muncul
     
+    // Tampilkan notifikasi non-blokir tanpa menghapus struk
     showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
     
     // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
@@ -632,6 +634,7 @@ function renderStrukPreviewPembelian(strukData) {
     strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPembelian)}</span></p>`;
     
     document.getElementById('strukContentPembelian').innerHTML = strukHTML;
+    document.getElementById('shareButtonsPembelian').style.display = 'flex';
 }
 
 function shareViaWhatsAppPembelian() {
@@ -803,13 +806,11 @@ function selectMasterItemFromModal(name, sellingPrice, purchasePrice) {
         document.getElementById('namaBarangPenjualan').value = name;
         document.getElementById('hargaSatuanPenjualan').value = sellingPrice;
         document.getElementById('hargaBeliPenjualan').value = purchasePrice;
-        document.getElementById('jumlahKuantitasPenjualan').value = '';
         document.getElementById('jumlahKuantitasPenjualan').focus();
     } else if (currentTransactionType === 'pembelian') {
         document.getElementById('namaBarangPembelian').value = name;
         document.getElementById('hargaBeliPembelian').value = purchasePrice;
         document.getElementById('hargaJualPembelian').value = sellingPrice;
-        document.getElementById('jumlahKuantitasPembelian').value = '';
         document.getElementById('jumlahKuantitasPembelian').focus();
     }
     closeMasterItemModal();
