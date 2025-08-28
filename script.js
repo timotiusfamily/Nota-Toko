@@ -1,4 +1,3 @@
-
 let salesHistory = [];
 let purchaseHistory = [];
 let pendingSales = [];
@@ -12,6 +11,7 @@ let editingItemId = null;
 let masterItems = [];
 let userId = null;
 let currentStrukData = null; // Variabel global untuk menyimpan data struk sementara
+let editingMasterItemIndex = null; // Variabel global untuk menyimpan indeks item yang sedang diedit
 
 // --- PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
@@ -707,7 +707,7 @@ function renderMasterItems() {
         const editButton = document.createElement('button');
         editButton.innerText = 'Edit';
         editButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        editButton.onclick = () => editMasterItem(index);
+        editButton.onclick = () => editMasterItemInModal(index); // Panggil fungsi baru
         actionCell.appendChild(editButton);
         const deleteButton = document.createElement('button');
         deleteButton.innerText = 'Hapus';
@@ -717,16 +717,47 @@ function renderMasterItems() {
     });
 }
 
-function editMasterItem(index) {
-    const itemToEdit = masterItems[index];
-    if (itemToEdit) {
-        document.getElementById('namaBarangPenjualan').value = itemToEdit.name;
-        document.getElementById('hargaSatuanPenjualan').value = itemToEdit.price;
-        document.getElementById('hargaBeliPenjualan').value = itemToEdit.purchasePrice;
-        document.getElementById('jumlahKuantitasPenjualan').value = '';
-        document.getElementById('namaBarangPenjualan').focus();
-        showSection('penjualan', document.getElementById('navPenjualan'));
+function editMasterItemInModal(index) {
+    const item = masterItems[index];
+    if (item) {
+        editingMasterItemIndex = index;
+        document.getElementById('editMasterItemName').value = item.name;
+        document.getElementById('editMasterItemSellingPrice').value = item.price;
+        document.getElementById('editMasterItemPurchasePrice').value = item.purchasePrice;
+        document.getElementById('editMasterItemStock').value = item.stock;
+        document.getElementById('editMasterItemModal').style.display = 'flex';
     }
+}
+
+async function saveEditedMasterItem() {
+    if (editingMasterItemIndex === null) return;
+    
+    const name = document.getElementById('editMasterItemName').value.trim();
+    const sellingPrice = parseInt(document.getElementById('editMasterItemSellingPrice').value);
+    const purchasePrice = parseInt(document.getElementById('editMasterItemPurchasePrice').value);
+    const stock = parseInt(document.getElementById('editMasterItemStock').value);
+    
+    if (!name || isNaN(sellingPrice) || isNaN(purchasePrice) || isNaN(stock)) {
+        showTemporaryAlert('Mohon lengkapi semua field.', 'red');
+        return;
+    }
+    
+    masterItems[editingMasterItemIndex] = {
+        name: name,
+        price: sellingPrice,
+        purchasePrice: purchasePrice,
+        stock: stock
+    };
+    
+    await saveDataToFirestore();
+    renderMasterItems();
+    closeEditMasterItemModal();
+    showTemporaryAlert('Barang master berhasil diperbarui.', 'green');
+}
+
+function closeEditMasterItemModal() {
+    document.getElementById('editMasterItemModal').style.display = 'none';
+    editingMasterItemIndex = null;
 }
 
 function deleteMasterItem(index) {
