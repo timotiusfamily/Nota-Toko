@@ -10,6 +10,7 @@ let itemCounter = 0;
 let editingItemId = null;
 let masterItems = [];
 let userId = null;
+let currentStrukData = null; // Variabel global untuk menyimpan data struk sementara
 
 // --- PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
@@ -354,6 +355,28 @@ function renderTablePenjualan() {
     });
 }
 
+// FUNGSI REVISI
+function renderStrukPreviewPenjualan(strukData) {
+    currentStrukData = strukData; // Simpan data struk ke variabel global
+
+    const namaToko = strukData.toko || 'Nama Toko';
+    const tanggal = strukData.tanggal;
+    const namaPembeli = strukData.pembeli || 'Pelanggan Yth.';
+
+    let strukHTML = `<h3 class="text-center font-bold text-lg">${namaToko}</h3>`;
+    strukHTML += `<p class="text-center text-sm">Tgl: ${tanggal} | Pembeli: ${namaPembeli}</p><hr class="my-2 border-dashed border-gray-400">`;
+    strukHTML += `<ul>`;
+    strukData.items.forEach(item => {
+        strukHTML += `<li class="flex justify-between text-sm py-1"><span>${item.nama} (${item.qty} x ${formatRupiah(item.hargaSatuan)})</span><span>${formatRupiah(item.jumlah)}</span></li>`;
+    });
+    strukHTML += `</ul>`;
+    strukHTML += `<hr class="my-2 border-dashed border-gray-400">`;
+    strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPenjualan)}</span></p>`;
+    
+    document.getElementById('strukOutputPenjualan').innerHTML = strukHTML;
+}
+
+// FUNGSI REVISI
 async function selesaikanPembayaran() {
     if (currentItems.length === 0) {
         showTemporaryAlert('Tambahkan barang terlebih dahulu.', 'red');
@@ -384,79 +407,75 @@ async function selesaikanPembayaran() {
     salesHistory.push(newStruk);
     await saveDataToFirestore();
 
+    // Render struk dan simpan data ke variabel global
     renderStrukPreviewPenjualan(newStruk);
     document.getElementById('printerCard').style.display = 'block';
+
+    // Pemicu download otomatis
+    downloadStrukJPG();
     
-    // Tampilkan notifikasi non-blokir
-    showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk siap dicetak atau dibagikan!', 'green');
+    showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk akan diunduh otomatis!', 'green');
 }
 
-function renderStrukPreviewPenjualan(strukData) {
-    const namaToko = strukData.toko || 'Nama Toko';
-    const tanggal = strukData.tanggal;
-    const namaPembeli = strukData.pembeli || 'Pelanggan Yth.';
-
-    let strukHTML = `<h3 class="text-center font-bold text-lg">${namaToko}</h3>`;
-    strukHTML += `<p class="text-center text-sm">Tgl: ${tanggal} | Pembeli: ${namaPembeli}</p><hr class="my-2 border-dashed border-gray-400">`;
-    strukHTML += `<ul>`;
-    strukData.items.forEach(item => {
-        strukHTML += `<li class="flex justify-between text-sm py-1"><span>${item.nama} (${item.qty} x ${formatRupiah(item.hargaSatuan)})</span><span>${formatRupiah(item.jumlah)}</span></li>`;
-    });
-    strukHTML += `</ul>`;
-    strukHTML += `<hr class="my-2 border-dashed border-gray-400">`;
-    strukHTML += `<p class="flex justify-between text-lg font-bold"><span>TOTAL:</span><span>${formatRupiah(strukData.totalPenjualan)}</span></p>`;
-    
-    document.getElementById('strukOutputPenjualan').innerHTML = strukHTML;
-}
-
-function cetakStruk() {
-    const elementsToHide = document.querySelectorAll('header, .mobile-nav, .content-section:not(.active), .action-buttons, .search-icon-btn, button:not(#printButton), input, label, table thead');
-    elementsToHide.forEach(el => { el.style.display = 'none'; });
-
-    document.body.style.backgroundColor = 'white';
-    document.querySelector('#penjualanSection').style.boxShadow = 'none';
-
-    window.print();
-
-    elementsToHide.forEach(el => { el.style.display = ''; });
-    document.body.style.backgroundColor = '';
-    document.querySelector('#penjualanSection').style.boxShadow = '';
-}
-
+// FUNGSI REVISI untuk membagikan struk via WhatsApp
 function shareViaWhatsAppPenjualan() {
-    const lastStruk = salesHistory[salesHistory.length - 1];
-    if (!lastStruk) {
-        showTemporaryAlert('Tidak ada struk untuk dibagikan.', 'red');
+    // Ambil data dari variabel global
+    if (!currentStrukData) {
+        showTemporaryAlert('Tidak ada struk untuk dibagikan. Silakan selesaikan pembayaran terlebih dahulu.', 'red');
         return;
     }
-    let message = `*NOTA PENJUALAN*\n\n*${lastStruk.toko || 'Nama Toko'}*\nTanggal: ${lastStruk.tanggal}\nPembeli: ${lastStruk.pembeli}\n\n*Daftar Barang:*\n`;
-    lastStruk.items.forEach((item, index) => {
-        message += `${index + 1}. ${item.nama} (${item.qty} x ${formatRupiah(item.hargaSatuan)}) = ${formatRupiah(item.jumlah)}\n`;
-    });
-    message += `\n*TOTAL: ${formatRupiah(lastStruk.totalPenjualan)}*\n\nTerima kasih!\n_Dibuat dengan Aplikasi Nota & Stok_`;
+
+    // Siapkan pesan teks yang berisi semua detail struk
+    const namaToko = currentStrukData.toko || 'Nama Toko';
+    const tanggal = currentStrukData.tanggal;
+    const namaPembeli = currentStrukData.pembeli || 'Pelanggan Yth.';
+    const totalPenjualan = formatRupiah(currentStrukData.totalPenjualan);
+
+    let message = `*NOTA PENJUALAN*\n\n`;
+    message += `*${namaToko}*\n`;
+    message += `Tgl: ${tanggal}\n`;
+    message += `Pembeli: ${namaPembeli}\n`;
+    message += `--------------------------------\n`;
+    message += `*Daftar Barang:*\n`;
+
+    // Gunakan map dan join untuk memastikan semua item masuk dalam string
+    message += currentStrukData.items.map(item => 
+        `${item.nama} (${item.qty} x ${formatRupiah(item.hargaSatuan)}) = ${formatRupiah(item.jumlah)}`
+    ).join('\n');
+
+    message += `\n--------------------------------\n`;
+    message += `*TOTAL: ${totalPenjualan}*\n\n`;
+    message += `_Terima kasih telah berbelanja!_`;
+
+    // Buka WhatsApp dengan pesan teks yang sudah disiapkan
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 }
 
-async function simpanTransaksiPending() {
-    if (currentItems.length === 0) {
-        showTemporaryAlert('Tidak ada barang untuk disimpan.', 'red');
+
+// FUNGSI REVISI untuk membuat dan mengunduh struk sebagai JPG
+function downloadStrukJPG() {
+    const strukOutput = document.getElementById('strukOutputPenjualan');
+    if (!strukOutput || !strukOutput.innerHTML.trim()) {
+        showTemporaryAlert('Tidak ada struk untuk diunduh.', 'red');
         return;
     }
-    const tanggal = document.getElementById('tanggalPenjualan').value;
-    const namaPembeli = document.getElementById('namaPembeli').value || 'Pelanggan Yth.';
-    const newPendingTransaction = {
-        id: Date.now(),
-        tanggal: tanggal,
-        pembeli: namaPembeli,
-        toko: document.getElementById('namaToko').value || 'Nama Toko',
-        items: JSON.parse(JSON.stringify(currentItems)),
-        totalPenjualan: currentGrandTotalPenjualan,
-        totalLabaRugi: currentGrandTotalLabaRugi
-    };
-    pendingSales.push(newPendingTransaction);
-    await saveDataToFirestore();
-    showTemporaryAlert('Transaksi berhasil disimpan sebagai pending!', 'green');
-    resetCurrentTransaction('penjualan');
+
+    // Menggunakan html2canvas untuk mengubah elemen struk menjadi canvas
+    html2canvas(strukOutput, {
+        scale: 3, // Meningkatkan resolusi gambar untuk kualitas yang lebih baik
+        backgroundColor: '#ffffff' // Menghilangkan latar belakang transparan
+    }).then(canvas => {
+        // Mengubah canvas menjadi format blob (Binary Large Object)
+        canvas.toBlob(function(blob) {
+            // Menggunakan FileSaver.js untuk memicu dialog unduhan
+            const fileName = `struk_penjualan_${new Date().toISOString().slice(0, 10)}.jpg`;
+            saveAs(blob, fileName);
+            showTemporaryAlert('Struk berhasil diunduh sebagai JPG!', 'green');
+        }, 'image/jpeg', 0.9); // Mengatur format dan kualitas JPG
+    }).catch(error => {
+        console.error("Gagal membuat gambar dari canvas:", error);
+        showTemporaryAlert('Gagal mengunduh struk JPG.', 'red');
+    });
 }
 
 // --- Pembelian Management ---
@@ -1294,6 +1313,125 @@ function restoreMasterItems(event) {
     };
     reader.readAsText(file);
     event.target.value = '';
+}
+
+// Fungsi baru untuk koneksi Web Bluetooth
+let printerDevice;
+let printerCharacteristic;
+
+async function connectToBluetoothPrinter() {
+    try {
+        showTemporaryAlert('Mencari perangkat Bluetooth...', 'green');
+        // Filter untuk menemukan printer thermal umum
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{
+                services: ['000018f0-0000-1000-8000-00805f9b34fb'] // UUID untuk Layanan Printer
+            }, {
+                services: ['000018f1-0000-1000-8000-00805f9b34fb'] // UUID lain jika diperlukan
+            }, {
+                namePrefix: 'MTP'
+            }, {
+                namePrefix: 'Printer'
+            }, {
+                namePrefix: 'BT-PRINTER'
+            }],
+            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+        const characteristic = await service.getCharacteristic('00002af0-0000-1000-8000-00805f9b34fb');
+        
+        printerDevice = device;
+        printerCharacteristic = characteristic;
+        
+        showTemporaryAlert(`Berhasil terhubung ke ${device.name}!`, 'green');
+        return true;
+    } catch (error) {
+        console.error("Web Bluetooth Error:", error);
+        showTemporaryAlert('Gagal terhubung ke printer. Pastikan Bluetooth aktif dan printer terdeteksi.', 'red');
+        return false;
+    }
+}
+
+async function printThermal() {
+    const lastStruk = salesHistory[salesHistory.length - 1];
+    if (!lastStruk) {
+        showTemporaryAlert('Tidak ada struk untuk dicetak.', 'red');
+        return;
+    }
+    
+    // Periksa apakah sudah terhubung. Jika belum, coba hubungkan.
+    if (!printerDevice || !printerDevice.gatt.connected) {
+        const success = await connectToBluetoothPrinter();
+        if (!success) {
+            return;
+        }
+    }
+    
+    try {
+        // Perintah ESC/POS
+        let printerCommands = new Uint8Array([
+            0x1B, 0x40, // ESC @ - Initialize printer
+            0x1B, 0x61, 0x01, // ESC a 1 - Center align
+            0x1B, 0x21, 0x01 // ESC ! 1 - Double height
+        ]);
+        
+        // Nama Toko (ukuran besar)
+        const namaToko = (lastStruk.toko || 'NAMA TOKO').toUpperCase() + '\n';
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode(namaToko));
+        
+        // Reset dan align kiri
+        printerCommands = concatenate(printerCommands, new Uint8Array([
+            0x1B, 0x21, 0x00, // ESC ! 0 - Normal font
+            0x1B, 0x61, 0x00, // ESC a 0 - Left align
+        ]));
+
+        // Informasi Transaksi
+        const infoStruk = `--------------------------------\n` +
+                          `Tgl: ${lastStruk.tanggal}\n` +
+                          `Pembeli: ${lastStruk.pembeli || 'Pelanggan'}\n` +
+                          `--------------------------------\n`;
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode(infoStruk));
+
+        // Daftar Barang
+        lastStruk.items.forEach(item => {
+            const line = `${item.nama}\n` +
+                         `  ${item.qty} x ${formatRupiah(item.hargaSatuan)}\t${formatRupiah(item.jumlah)}\n`;
+            printerCommands = concatenate(printerCommands, new TextEncoder().encode(line));
+        });
+
+        // Total
+        const totalStruk = `--------------------------------\n` +
+                           `TOTAL:\t\t${formatRupiah(lastStruk.totalPenjualan)}\n` +
+                           `--------------------------------\n\n`;
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode(totalStruk));
+        
+        // Pesan penutup
+        const closingMessage = `Terima kasih!\n` +
+                               `Aplikasi Nota & Stok\n\n\n\n`;
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode(closingMessage));
+        
+        // Mengirim data ke printer dalam potongan kecil
+        const chunkSize = 512;
+        for (let i = 0; i < printerCommands.length; i += chunkSize) {
+            const chunk = printerCommands.slice(i, i + chunkSize);
+            await printerCharacteristic.writeValue(chunk);
+        }
+        
+        showTemporaryAlert('Struk berhasil dicetak!', 'green');
+
+    } catch (error) {
+        console.error("Print Error:", error);
+        showTemporaryAlert('Gagal mencetak. Error: ' + error.message, 'red');
+    }
+}
+
+function concatenate(a, b) {
+    const result = new Uint8Array(a.length + b.length);
+    result.set(a, 0);
+    result.set(b, a.length);
+    return result;
 }
 
 // Custom Message Box
