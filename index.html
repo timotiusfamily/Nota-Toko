@@ -430,7 +430,8 @@
     <p class="text-sm text-gray-600 mt-4">*(Catatan: Stok dihitung berdasarkan master barang dan transaksi penjualan/pembelian yang tercatat.)*</p>
 </div>
 
-</div> <div id="masterItemModal" class="modal">
+</div> 
+<div id="masterItemModal" class="modal">
     <div class="modal-content">
         <span class="close-button" onclick="closeMasterItemModal()">×</span>
         <h2 class="text-xl font-bold text-gray-900 mb-4">Pilih Barang Master</h2>
@@ -449,6 +450,35 @@
                 <tbody id="modalMasterItemsList" class="divide-y divide-gray-200"></tbody>
             </table>
         </div>
+    </div>
+</div>
+
+<div id="editMasterItemModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" onclick="closeEditMasterItemModal()">×</span>
+        <h2 class="text-xl font-bold text-gray-900 mb-4">Edit Barang Master</h2>
+        <form onsubmit="event.preventDefault(); saveEditedMasterItem();">
+            <div class="mb-4">
+                <label for="editMasterItemName" class="block text-gray-700 text-sm mb-2">Nama Barang:</label>
+                <input type="text" id="editMasterItemName" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            <div class="mb-4">
+                <label for="editMasterItemSellingPrice" class="block text-gray-700 text-sm mb-2">Harga Jual (Rp.):</label>
+                <input type="number" id="editMasterItemSellingPrice" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            <div class="mb-4">
+                <label for="editMasterItemPurchasePrice" class="block text-gray-700 text-sm mb-2">Harga Beli (Rp.):</label>
+                <input type="number" id="editMasterItemPurchasePrice" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            <div class="mb-4">
+                <label for="editMasterItemStock" class="block text-gray-700 text-sm mb-2">Stok:</label>
+                <input type="number" id="editMasterItemStock" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            <div class="flex justify-end gap-4">
+                <button type="button" onclick="closeEditMasterItemModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200">Batal</button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200">Simpan</button>
+            </div>
+        </form>
     </div>
 </div>
 
