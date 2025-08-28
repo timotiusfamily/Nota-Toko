@@ -73,7 +73,7 @@
     <h1 class="text-2xl font-extrabold text-center text-gray-900 mb-6">Aplikasi Nota Penjualan</h1>
     <div class="mb-4">
         <label for="namaToko" class="block text-gray-700 text-sm mb-2">Nama Toko:</label>
-        <input type="text" id="namaToko" placeholder="Contoh: Toko Barokah" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <input type="text" id="namaToko" placeholder="Contoh: Toko Maju Jaya" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
     </div>
     <div class="flex flex-wrap -mx-2 mb-4">
         <div class="w-full md:w-1/2 px-2 mb-4 md:mb-0">
@@ -151,9 +151,11 @@
             <button onclick="shareViaWhatsAppPenjualan()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200">
                 <i class="fab fa-whatsapp mr-2"></i> Bagikan Via WhatsApp
             </button>
-             <button onclick="printBluetooth()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200">
-                <i class="fas fa-bluetooth-b mr-2"></i> Cetak Bluetooth
-            </button>
+            <div id="downloadStrukBtnContainer" class="flex justify-end pt-2">
+                <button onclick="downloadStrukJPG()" class="bg-gray-500 hover:bg-gray-600 text-white py-1 px-2 rounded-lg text-xs transition duration-200">
+                    <i class="fas fa-image mr-1"></i> Download JPG
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -474,8 +476,9 @@
 
 <script src="script.js"></script>
 <script src="service-worker.js"></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
 </body>
 </html>
