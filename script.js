@@ -1315,38 +1315,88 @@ function restoreMasterItems(event) {
     event.target.value = '';
 }
 
-// Fungsi baru untuk koneksi Web Bluetooth
+/* === FUNGSI REVISI PENCETAKAN VIA BLUETOOTH === */
+
 let printerDevice;
 let printerCharacteristic;
 
+// Daftar UUID layanan dan karakteristik yang umum digunakan oleh printer thermal
+const PRINTER_UUIDS = [
+    { service: '000018f0-0000-1000-8000-00805f9b34fb', characteristic: '00002af0-0000-1000-8000-00805f9b34fb' }, // UUID umum untuk Printer
+    { service: '000018f1-0000-1000-8000-00805f9b34fb', characteristic: '00002af1-0000-1000-8000-00805f9b34fb' }, // Alternatif
+    { service: 'e7810a71-73ae-4999-8c52-bc108e42f778', characteristic: 'bef8d6c9-9c44-4214-9b5d-1147814e4b5e' }, // Contoh UUID kustom
+    { service: '49535343-fe7d-4ae5-8fa9-9fafd205e455', characteristic: '49535343-8841-43f4-a8d4-ecbe34729bb3' }, // Contoh lain (serial port service)
+    // Anda bisa menambahkan UUID lain di sini jika tahu model printer Anda
+];
+
+/**
+ * Mencoba terhubung ke printer Bluetooth thermal.
+ * Fungsi ini akan mencoba beberapa UUID yang umum.
+ * @returns {Promise<boolean>} Mengembalikan true jika berhasil terhubung, false jika gagal.
+ */
 async function connectToBluetoothPrinter() {
     try {
         showTemporaryAlert('Mencari perangkat Bluetooth...', 'green');
-        // Filter untuk menemukan printer thermal umum
-        const device = await navigator.bluetooth.requestDevice({
-            filters: [{
-                services: ['000018f0-0000-1000-8000-00805f9b34fb'] // UUID untuk Layanan Printer
-            }, {
-                services: ['000018f1-0000-1000-8000-00805f9b34fb'] // UUID lain jika diperlukan
-            }, {
-                namePrefix: 'MTP'
-            }, {
-                namePrefix: 'Printer'
-            }, {
-                namePrefix: 'BT-PRINTER'
-            }],
-            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
-        });
 
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-        const characteristic = await service.getCharacteristic('00002af0-0000-1000-8000-00805f9b34fb');
+        let device;
+        let service;
+        let characteristic;
+
+        for (const uuidSet of PRINTER_UUIDS) {
+            try {
+                // Coba dengan UUID yang spesifik
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{
+                        services: [uuidSet.service]
+                    }],
+                    optionalServices: [uuidSet.service]
+                });
+
+                const server = await device.gatt.connect();
+                service = await server.getPrimaryService(uuidSet.service);
+                characteristic = await service.getCharacteristic(uuidSet.characteristic);
+
+                if (characteristic) {
+                    printerDevice = device;
+                    printerCharacteristic = characteristic;
+                    showTemporaryAlert(`Berhasil terhubung ke ${device.name}!`, 'green');
+                    return true;
+                }
+            } catch (innerError) {
+                console.warn(`Gagal terhubung dengan UUID ${uuidSet.service}. Mencoba UUID berikutnya...`);
+                // Lanjutkan ke UUID berikutnya
+            }
+        }
         
-        printerDevice = device;
-        printerCharacteristic = characteristic;
-        
-        showTemporaryAlert(`Berhasil terhubung ke ${device.name}!`, 'green');
-        return true;
+        // Jika semua UUID spesifik gagal, coba filter umum
+        try {
+            device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true,
+                optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '000018f1-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455']
+            });
+
+            const server = await device.gatt.connect();
+            for (const uuidSet of PRINTER_UUIDS) {
+                try {
+                    service = await server.getPrimaryService(uuidSet.service);
+                    characteristic = await service.getCharacteristic(uuidSet.characteristic);
+                    if (characteristic) {
+                        printerDevice = device;
+                        printerCharacteristic = characteristic;
+                        showTemporaryAlert(`Berhasil terhubung ke ${device.name}!`, 'green');
+                        return true;
+                    }
+                } catch (e) {
+                    // Lanjutkan ke UUID karakteristik berikutnya
+                }
+            }
+        } catch (error) {
+            console.error("Kesalahan koneksi umum:", error);
+            showTemporaryAlert('Gagal terhubung ke printer. Pastikan Bluetooth aktif dan printer terdeteksi.', 'red');
+            return false;
+        }
+
+
     } catch (error) {
         console.error("Web Bluetooth Error:", error);
         showTemporaryAlert('Gagal terhubung ke printer. Pastikan Bluetooth aktif dan printer terdeteksi.', 'red');
@@ -1354,71 +1404,80 @@ async function connectToBluetoothPrinter() {
     }
 }
 
+
+/**
+ * Mengirim perintah cetak struk ke printer thermal.
+ */
 async function printThermal() {
     const lastStruk = salesHistory[salesHistory.length - 1];
     if (!lastStruk) {
         showTemporaryAlert('Tidak ada struk untuk dicetak.', 'red');
         return;
     }
-    
-    // Periksa apakah sudah terhubung. Jika belum, coba hubungkan.
+
+    // Periksa koneksi, jika tidak ada, coba hubungkan terlebih dahulu
     if (!printerDevice || !printerDevice.gatt.connected) {
         const success = await connectToBluetoothPrinter();
         if (!success) {
             return;
         }
     }
-    
-    try {
-        // Perintah ESC/POS
-        let printerCommands = new Uint8Array([
-            0x1B, 0x40, // ESC @ - Initialize printer
-            0x1B, 0x61, 0x01, // ESC a 1 - Center align
-            0x1B, 0x21, 0x01 // ESC ! 1 - Double height
-        ]);
-        
-        // Nama Toko (ukuran besar)
-        const namaToko = (lastStruk.toko || 'NAMA TOKO').toUpperCase() + '\n';
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(namaToko));
-        
-        // Reset dan align kiri
-        printerCommands = concatenate(printerCommands, new Uint8Array([
-            0x1B, 0x21, 0x00, // ESC ! 0 - Normal font
-            0x1B, 0x61, 0x00, // ESC a 0 - Left align
-        ]));
 
-        // Informasi Transaksi
-        const infoStruk = `--------------------------------\n` +
-                          `Tgl: ${lastStruk.tanggal}\n` +
-                          `Pembeli: ${lastStruk.pembeli || 'Pelanggan'}\n` +
-                          `--------------------------------\n`;
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(infoStruk));
+    try {
+        const encoder = new TextEncoder('utf-8');
+        let commands = [];
+
+        // Inisialisasi printer dan font
+        commands.push(new Uint8Array([0x1B, 0x40])); // ESC @ - Inisialisasi printer
+        commands.push(new Uint8Array([0x1B, 0x61, 0x01])); // ESC a 1 - Rata tengah
+        commands.push(new Uint8Array([0x1D, 0x21, 0x01])); // GS ! 1 - Tinggi ganda
+        commands.push(encoder.encode((lastStruk.toko || 'NAMA TOKO').toUpperCase() + '\n'));
+
+        // Reset font dan rata kiri
+        commands.push(new Uint8Array([0x1D, 0x21, 0x00])); // GS ! 0 - Normal font
+        commands.push(new Uint8Array([0x1B, 0x61, 0x00])); // ESC a 0 - Rata kiri
+        commands.push(encoder.encode(`--------------------------------\n`));
+        commands.push(encoder.encode(`Tgl: ${lastStruk.tanggal}\n`));
+        commands.push(encoder.encode(`Pembeli: ${lastStruk.pembeli || 'Pelanggan'}\n`));
+        commands.push(encoder.encode(`--------------------------------\n`));
 
         // Daftar Barang
         lastStruk.items.forEach(item => {
-            const line = `${item.nama}\n` +
-                         `  ${item.qty} x ${formatRupiah(item.hargaSatuan)}\t${formatRupiah(item.jumlah)}\n`;
-            printerCommands = concatenate(printerCommands, new TextEncoder().encode(line));
+            commands.push(encoder.encode(`${item.nama}\n`));
+            commands.push(encoder.encode(`  ${item.qty} x ${formatRupiah(item.hargaSatuan)}\n`));
+            commands.push(new Uint8Array([0x1B, 0x61, 0x02])); // Rata kanan
+            commands.push(encoder.encode(`${formatRupiah(item.jumlah)}\n`));
+            commands.push(new Uint8Array([0x1B, 0x61, 0x00])); // Rata kiri lagi
         });
 
         // Total
-        const totalStruk = `--------------------------------\n` +
-                           `TOTAL:\t\t${formatRupiah(lastStruk.totalPenjualan)}\n` +
-                           `--------------------------------\n\n`;
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(totalStruk));
-        
-        // Pesan penutup
-        const closingMessage = `Terima kasih!\n` +
-                               `Aplikasi Nota & Stok\n\n\n\n`;
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(closingMessage));
-        
-        // Mengirim data ke printer dalam potongan kecil
-        const chunkSize = 512;
-        for (let i = 0; i < printerCommands.length; i += chunkSize) {
-            const chunk = printerCommands.slice(i, i + chunkSize);
+        commands.push(encoder.encode(`--------------------------------\n`));
+        commands.push(encoder.encode(`TOTAL: ${formatRupiah(lastStruk.totalPenjualan)}\n`));
+        commands.push(encoder.encode(`--------------------------------\n\n`));
+
+        // Pesan penutup dan pemotong kertas
+        commands.push(new Uint8Array([0x1B, 0x61, 0x01])); // Rata tengah
+        commands.push(encoder.encode(`Terima kasih!\n`));
+        commands.push(encoder.encode(`Aplikasi Nota & Stok\n\n\n\n`));
+        commands.push(new Uint8Array([0x1D, 0x56, 0x00])); // GS V 0 - Potong kertas (model tertentu)
+        commands.push(new Uint8Array([0x0A, 0x0A, 0x0A])); // Line feeds tambahan
+
+        // Menggabungkan semua perintah menjadi satu Uint8Array besar
+        const totalLength = commands.reduce((sum, arr) => sum + arr.length, 0);
+        const combinedCommands = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const command of commands) {
+            combinedCommands.set(command, offset);
+            offset += command.length;
+        }
+
+        // Mengirim data dalam potongan kecil
+        const chunkSize = 20; // Batasan umum untuk writeValue
+        for (let i = 0; i < combinedCommands.length; i += chunkSize) {
+            const chunk = combinedCommands.slice(i, i + chunkSize);
             await printerCharacteristic.writeValue(chunk);
         }
-        
+
         showTemporaryAlert('Struk berhasil dicetak!', 'green');
 
     } catch (error) {
