@@ -12,6 +12,7 @@ let masterItems = [];
 let userId = null;
 let currentStrukData = null; // Variabel global untuk menyimpan data struk sementara
 let editingMasterItemIndex = null; // Variabel global untuk menyimpan indeks item yang sedang diedit
+let currentDetailedSales = []; // NEW: Variabel global untuk detail laporan penjualan
 
 // --- PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
@@ -54,11 +55,24 @@ document.addEventListener('DOMContentLoaded', (event) => {
             document.getElementById('restoreFileInput').addEventListener('change', restoreMasterItems);
             
             showSection('dashboard', document.getElementById('navDashboard'));
+
+            document.getElementById('salesFilterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+            document.getElementById('salesFilterEndDate').value = formattedDate;
+            
             document.getElementById('filterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('filterEndDate').value = formattedDate;
 
             document.getElementById('historyFilterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('historyFilterEndDate').value = formattedDate;
+
+            // NEW: Event listener untuk tabel laporan penjualan
+            document.getElementById('dailySalesList').addEventListener('click', (event) => {
+                const row = event.target.closest('tr');
+                if (row && row.cells.length > 1) {
+                    const date = row.cells[0].innerText;
+                    showSalesDetails(date);
+                }
+            });
 
         } else {
             window.location.href = 'login.html';
@@ -185,11 +199,19 @@ function resetCurrentTransaction(type) {
     }
 }
 
-// --- Tab Navigation ---
+// MODIFIED: Mengatur ulang logika showSection
 function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
     const sections = document.querySelectorAll('.main-content-wrapper.content-section');
-    sections.forEach(section => section.classList.remove('active'));
-    document.getElementById(`${sectionId}Section`).classList.add('active');
+    sections.forEach(section => {
+        section.style.display = 'none';
+        section.classList.remove('active');
+    });
+
+    const activeSection = document.getElementById(`${sectionId}Section`);
+    if (activeSection) {
+        activeSection.style.display = 'block';
+        activeSection.classList.add('active');
+    }
 
     const navButtons = document.querySelectorAll('.mobile-nav button');
     navButtons.forEach(btn => btn.classList.remove('active'));
@@ -206,15 +228,18 @@ function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
             resetCurrentTransaction('pembelian');
         }
     }
-
+    
+    // Panggil fungsi render yang sesuai untuk setiap tab
     if (sectionId === 'dashboard') {
         renderDashboard();
     } else if (sectionId === 'history') {
-        filterHistory(); // Panggil filter history saat masuk tab
+        filterHistory();
     } else if (sectionId === 'pending') {
         renderPendingSales();
     } else if (sectionId === 'profitLoss') {
         generateProfitLossReport();
+    } else if (sectionId === 'salesReport') { // NEW: Tab Laporan Penjualan
+        generateSalesReport();
     } else if (sectionId === 'stock') {
         generateStockReport();
     }
@@ -416,6 +441,8 @@ async function selesaikanPembayaran() {
     downloadStrukJPG();
     
     showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk akan diunduh otomatis!', 'green');
+
+    generateStockReport(); // MODIFIED: Panggil setelah perubahan stok
 }
 
 // FUNGSI REVISI untuk membagikan struk via WhatsApp
@@ -636,8 +663,7 @@ async function simpanNotaPembelian() {
     
     // Tampilkan notifikasi non-blokir
     showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
-    
-    // Tidak lagi ada setTimeout untuk menghapus struk. Struk akan tetap di layar.
+
 }
 
 function renderStrukPreviewPembelian(strukData) {
@@ -1135,8 +1161,9 @@ async function deletePendingTransaction(id) {
     });
 }
 
-// Laporan Rugi Laba
+// MODIFIED: Fungsi untuk Laporan Rugi Laba (hanya ringkasan)
 function generateProfitLossReport() {
+    // MODIFIED: Menggunakan filter khusus untuk laba rugi
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
     const filterItemName = document.getElementById('filterItemName').value.toLowerCase();
@@ -1233,6 +1260,298 @@ function downloadProfitLossPDF() {
     });
 }
 
+// NEW: Fungsi-fungsi untuk Laporan Penjualan (detail)
+function generateSalesReport() {
+    const startDate = document.getElementById('salesFilterStartDate').value;
+    const endDate = document.getElementById('salesFilterEndDate').value;
+    const filterName = document.getElementById('salesFilterName').value.toLowerCase();
+    
+    let filteredSales = salesHistory.filter(struk => {
+        const strukDate = struk.tanggal;
+        const dateMatch = (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
+        const nameMatch = !filterName || (struk.pembeli && struk.pembeli.toLowerCase().includes(filterName));
+        return dateMatch && nameMatch;
+    });
+
+    // MODIFIED: Menggabungkan data penjualan dan pembelian ke dalam laporan penjualan
+    const reportData = {};
+    let overallTotalSales = 0;
+
+    // Proses data penjualan
+    filteredSales.forEach(struk => {
+        const date = struk.tanggal;
+        if (!reportData[date]) {
+            reportData[date] = {
+                sales: [],
+                purchases: [],
+                totalPenjualan: 0,
+                totalLabaRugi: 0,
+                totalPembelian: 0
+            };
+        }
+        reportData[date].sales.push(struk);
+        reportData[date].totalPenjualan += struk.totalPenjualan;
+        reportData[date].totalLabaRugi += struk.totalLabaRugi;
+        overallTotalSales += struk.totalPenjualan;
+    });
+
+    // Proses data pembelian (untuk menampilkan di laporan yang sama)
+    purchaseHistory.filter(struk => {
+        const strukDate = struk.tanggal;
+        const dateMatch = (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
+        const nameMatch = !filterName || (struk.supplier && struk.supplier.toLowerCase().includes(filterName));
+        return dateMatch && nameMatch;
+    }).forEach(struk => {
+        const date = struk.tanggal;
+        if (!reportData[date]) {
+            reportData[date] = {
+                sales: [],
+                purchases: [],
+                totalPenjualan: 0,
+                totalLabaRugi: 0,
+                totalPembelian: 0
+            };
+        }
+        reportData[date].purchases.push(struk);
+        reportData[date].totalPembelian += struk.totalPembelian;
+    });
+
+
+    const dailySalesList = document.getElementById('dailySalesList');
+    dailySalesList.innerHTML = '';
+    
+    Object.keys(reportData).sort().forEach(date => {
+        const data = reportData[date];
+        const row = dailySalesList.insertRow();
+        row.classList.add('hover:bg-gray-50', 'cursor-pointer');
+        row.insertCell(0).innerText = date;
+        row.insertCell(1).innerText = formatRupiah(data.totalPenjualan);
+        row.insertCell(2).innerText = formatRupiah(data.totalLabaRugi);
+        const actionCell = row.insertCell(3);
+        const viewButton = document.createElement('button');
+        viewButton.innerText = 'Lihat Detail';
+        viewButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
+        viewButton.onclick = () => showSalesDetails(date);
+        actionCell.appendChild(viewButton);
+    });
+    
+    if (Object.keys(reportData).length === 0) dailySalesList.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Tidak ada data.</td></tr>';
+    document.getElementById('totalFilteredSales').innerText = formatRupiah(overallTotalSales);
+
+    hideSalesDetails();
+}
+
+// MODIFIED: Fungsi untuk menampilkan detail penjualan dan pembelian
+function showSalesDetails(date) {
+    const detailContainer = document.getElementById('salesDetailContainer');
+    const detailContent = document.getElementById('salesDetailContent');
+    document.getElementById('salesDetailDate').innerText = date;
+    
+    // Ambil data penjualan dan pembelian untuk tanggal yang dipilih
+    const salesForDate = salesHistory.filter(struk => struk.tanggal === date);
+    const purchasesForDate = purchaseHistory.filter(struk => struk.tanggal === date);
+    
+    currentDetailedSales = { sales: salesForDate, purchases: purchasesForDate, date: date };
+    
+    detailContent.innerHTML = '';
+
+    let totalSalesHarian = 0;
+    let totalLabaHarian = 0;
+    let totalPembelianHarian = 0;
+    
+    if (salesForDate.length > 0) {
+        detailContent.innerHTML += `<h4 class="text-lg font-bold mb-2">Detail Penjualan:</h4>`;
+        salesForDate.forEach(struk => {
+            let salesHtml = `
+                <div class="border-b border-dashed border-gray-300 mb-4 pb-4">
+                    <p class="font-bold">ID Nota: ${struk.id}</p>
+                    <p>Pembeli: ${struk.pembeli || 'Pelanggan Yth.'}</p>
+                    <p>Total Penjualan: ${formatRupiah(struk.totalPenjualan)}</p>
+                    <p class="mb-2">Total Laba/Rugi: ${formatRupiah(struk.totalLabaRugi)}</p>
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="py-2 px-1 text-left">Nama</th>
+                                <th class="py-2 px-1 text-left">Qty</th>
+                                <th class="py-2 px-1 text-left">Harga Jual</th>
+                                <th class="py-2 px-1 text-left">Laba/Rugi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            struk.items.forEach(item => {
+                salesHtml += `
+                            <tr>
+                                <td class="py-1 px-1">${item.nama}</td>
+                                <td class="py-1 px-1">${item.qty}</td>
+                                <td class="py-1 px-1">${formatRupiah(item.hargaSatuan)}</td>
+                                <td class="py-1 px-1">${formatRupiah(item.labaRugi)}</td>
+                            </tr>
+                `;
+            });
+            salesHtml += `</tbody></table></div>`;
+            detailContent.innerHTML += salesHtml;
+            totalSalesHarian += struk.totalPenjualan;
+            totalLabaHarian += struk.totalLabaRugi;
+        });
+    }
+
+    if (purchasesForDate.length > 0) {
+        detailContent.innerHTML += `<h4 class="text-lg font-bold mb-2">Detail Pembelian:</h4>`;
+        purchasesForDate.forEach(struk => {
+            let purchaseHtml = `
+                <div class="border-b border-dashed border-gray-300 mb-4 pb-4">
+                    <p class="font-bold">ID Nota: ${struk.id}</p>
+                    <p>Supplier: ${struk.supplier || 'Supplier Yth.'}</p>
+                    <p class="mb-2">Total Pembelian: ${formatRupiah(struk.totalPembelian)}</p>
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="py-2 px-1 text-left">Nama</th>
+                                <th class="py-2 px-1 text-left">Qty</th>
+                                <th class="py-2 px-1 text-left">Harga Beli</th>
+                                <th class="py-2 px-1 text-left">Jumlah</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            struk.items.forEach(item => {
+                purchaseHtml += `
+                            <tr>
+                                <td class="py-1 px-1">${item.nama}</td>
+                                <td class="py-1 px-1">${item.qty}</td>
+                                <td class="py-1 px-1">${formatRupiah(item.hargaBeli)}</td>
+                                <td class="py-1 px-1">${formatRupiah(item.jumlah)}</td>
+                            </tr>
+                `;
+            });
+            purchaseHtml += `</tbody></table></div>`;
+            detailContent.innerHTML += purchaseHtml;
+            totalPembelianHarian += struk.totalPembelian;
+        });
+    }
+    
+    if (salesForDate.length === 0 && purchasesForDate.length === 0) {
+        detailContent.innerHTML = `<p class="text-center text-gray-500">Tidak ada detail transaksi untuk tanggal ini.</p>`;
+    }
+
+    document.getElementById('salesReportContainer').classList.add('hidden');
+    detailContainer.classList.remove('hidden');
+}
+
+function hideSalesDetails() {
+    document.getElementById('salesDetailContainer').classList.add('hidden');
+    document.getElementById('salesReportContainer').classList.remove('hidden');
+}
+
+function shareSalesReportViaWhatsApp() {
+    const startDate = document.getElementById('salesFilterStartDate').value;
+    const endDate = document.getElementById('salesFilterEndDate').value;
+    const filterName = document.getElementById('salesFilterName').value.trim();
+
+    let message = `*Laporan Penjualan*\n`;
+    if (startDate && endDate) {
+        message += `Periode: ${startDate} s/d ${endDate}\n`;
+    }
+    if (filterName) {
+        message += `Nama Pembeli: ${filterName}\n`;
+    }
+    message += `\n`;
+    
+    const reportTable = document.getElementById('dailySalesList');
+    for (let i = 0; i < reportTable.rows.length; i++) {
+        const row = reportTable.rows[i];
+        if (row.cells.length > 1) { 
+            const date = row.cells[0].innerText;
+            const totalPenjualan = row.cells[1].innerText;
+            const totalLabaRugi = row.cells[2].innerText;
+            message += `Tanggal ${date}: Total Jual: ${totalPenjualan}, Laba: ${totalLabaRugi}\n`;
+        }
+    }
+
+    const totalSales = document.getElementById('totalFilteredSales').innerText;
+    message += `\n*TOTAL PENJUALAN: ${totalSales}*\n`;
+    message += `\n_Dibuat dengan Aplikasi Nota & Stok_`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+}
+
+function downloadSalesReportPDF() {
+    const element = document.getElementById('salesReportContainer');
+    html2pdf(element, {
+        margin: 10,
+        filename: `Laporan_Penjualan_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).then(() => {
+        showTemporaryAlert('Laporan Penjualan berhasil diunduh!', 'green');
+    }).catch(error => {
+        console.error("PDF generation failed:", error);
+        showTemporaryAlert('Gagal mengunduh Laporan Penjualan PDF.', 'red');
+    });
+}
+
+function shareSalesDetailsViaWhatsApp() {
+    if (currentDetailedSales.length === 0) {
+        showTemporaryAlert('Tidak ada detail transaksi untuk dibagikan.', 'red');
+        return;
+    }
+
+    let message = `*Detail Transaksi Tanggal ${currentDetailedSales.date}*\n\n`;
+
+    if (currentDetailedSales.sales.length > 0) {
+        message += `*Detail Penjualan:*\n`;
+        currentDetailedSales.sales.forEach(struk => {
+            message += `_Nota ID: ${struk.id}, Pembeli: ${struk.pembeli || 'Pelanggan Yth.'}, Total Jual: ${formatRupiah(struk.totalPenjualan)}, Laba: ${formatRupiah(struk.totalLabaRugi)}_ \n`;
+            struk.items.forEach(item => {
+                message += `${item.nama} (${item.qty} x ${formatRupiah(item.hargaSatuan)}) = ${formatRupiah(item.jumlah)} (Laba: ${formatRupiah(item.labaRugi)})\n`;
+            });
+        });
+        message += `\n`;
+    }
+
+    if (currentDetailedSales.purchases.length > 0) {
+        message += `*Detail Pembelian:*\n`;
+        currentDetailedSales.purchases.forEach(struk => {
+            message += `_Nota ID: ${struk.id}, Supplier: ${struk.supplier || 'Supplier Yth.'}, Total Beli: ${formatRupiah(struk.totalPembelian)}_ \n`;
+            struk.items.forEach(item => {
+                message += `${item.nama} (${item.qty} x ${formatRupiah(item.hargaBeli)}) = ${formatRupiah(item.jumlah)}\n`;
+            });
+        });
+        message += `\n`;
+    }
+
+    message += `_Dibuat dengan Aplikasi Nota & Stok_`;
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+}
+
+function downloadSalesDetailsPDF() {
+    if (currentDetailedSales.length === 0) {
+        showTemporaryAlert('Tidak ada detail transaksi untuk diunduh.', 'red');
+        return;
+    }
+    
+    // MODIFIED: Menggunakan ID elemen detail penjualan
+    const element = document.getElementById('salesDetailContent');
+    const filename = `Detail_Transaksi_${currentDetailedSales.date}.pdf`;
+    
+    html2pdf(element, {
+        margin: 10,
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).then(() => {
+        showTemporaryAlert('Detail transaksi berhasil diunduh!', 'green');
+    }).catch(error => {
+        console.error("PDF generation failed:", error);
+        showTemporaryAlert('Gagal mengunduh detail PDF.', 'red');
+    });
+}
+
+
 // Laporan Stok Barang
 function generateStockReport() {
     const stockReportList = document.getElementById('stockReportList');
@@ -1301,7 +1620,6 @@ function downloadStockReportPDF() {
         showTemporaryAlert('Gagal mengunduh Laporan Stok Barang PDF.', 'red');
     });
 }
-
 // Backup & Restore
 function backupMasterItems() {
     if (masterItems.length === 0) {
