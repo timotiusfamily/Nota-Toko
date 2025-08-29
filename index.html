@@ -395,6 +395,73 @@
     </div>
 </div>
 
+<div class="main-content-wrapper w-full p-6 bg-white rounded-xl shadow-lg mb-5 content-section" id="salesReportSection">
+    <h2 class="text-2xl font-extrabold text-center text-gray-900 mb-6">Laporan Penjualan</h2>
+    <div class="flex flex-wrap gap-3 mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50 filter-controls">
+        <div class="flex-1 min-w-[120px]">
+            <label for="salesFilterStartDate" class="block text-gray-700 text-sm mb-1">Dari Tanggal:</label>
+            <input type="date" id="salesFilterStartDate" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div class="flex-1 min-w-[120px]">
+            <label for="salesFilterEndDate" class="block text-gray-700 text-sm mb-1">Sampai Tanggal:</label>
+            <input type="date" id="salesFilterEndDate" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <div class="flex-1 min-w-[120px]">
+            <label for="salesFilterName" class="block text-gray-700 text-sm mb-1">Nama Pembeli:</label>
+            <input type="text" id="salesFilterName" placeholder="Cari nama pembeli..." class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <button onclick="generateSalesReport()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 self-end">Filter Laporan</button>
+    </div>
+    
+    <div id="salesReportContainer">
+        <div class="flex justify-between items-center my-4">
+            <h3 class="text-xl font-bold text-gray-900">Ringkasan Penjualan Harian</h3>
+            <div class="flex gap-2">
+                <button onclick="shareSalesReportViaWhatsApp()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
+                    <i class="fab fa-whatsapp"></i> Share
+                </button>
+                <button onclick="downloadSalesReportPDF()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </button>
+            </div>
+        </div>
+        <div id="dailySalesSummaryTable" class="report-table-container overflow-x-auto rounded-lg shadow-md mb-6">
+            <table class="min-w-full bg-white">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Penjualan</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Laba/Rugi</th>
+                        <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="dailySalesList" class="divide-y divide-gray-200"></tbody>
+            </table>
+        </div>
+        <div class="report-summary p-4 bg-blue-100 rounded-lg font-bold text-gray-900">
+            <p>Total Penjualan Filtered: <span id="totalFilteredSales">Rp. 0</span></p>
+        </div>
+    </div>
+    
+    <div id="salesDetailContainer" class="hidden mt-8 pt-4 border-t border-dashed border-gray-300">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-900">Detail Transaksi <span id="salesDetailDate"></span></h3>
+            <div class="flex gap-2">
+                <button onclick="shareSalesDetailsViaWhatsApp()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
+                    <i class="fab fa-whatsapp"></i> Share
+                </button>
+                <button onclick="downloadSalesDetailsPDF()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </button>
+                <button onclick="hideSalesDetails()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-3 rounded-lg text-sm flex items-center gap-1">
+                    <i class="fas fa-arrow-left"></i> Kembali
+                </button>
+            </div>
+        </div>
+        <div id="salesDetailContent" class="bg-white p-4 rounded-lg shadow-md"></div>
+    </div>
+</div>
+
 <div class="main-content-wrapper w-full p-6 bg-white rounded-xl shadow-lg mb-5 content-section" id="stockSection">
     <h2 class="text-2xl font-extrabold text-center text-gray-900 mb-6">Laporan Stok Barang</h2>
     <div class="flex flex-wrap gap-3 mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
@@ -501,6 +568,7 @@
     <button id="navPending" onclick="showSection('pending', this)"><i class="fas fa-hourglass-half"></i><span class="nav-label">Pending</span></button>
     <button id="navHistory" onclick="showSection('history', this)"><i class="fas fa-history"></i><span class="nav-label">Riwayat</span></button>
     <button id="navProfitLoss" onclick="showSection('profitLoss', this)"><i class="fas fa-chart-line"></i><span class="nav-label">Rugi Laba</span></button>
+    <button id="navSalesReport" onclick="showSection('salesReport', this)"><i class="fas fa-file-invoice-dollar"></i><span class="nav-label">Lap. Penjualan</span></button>
     <button id="navStock" onclick="showSection('stock', this)"><i class="fas fa-warehouse"></i><span class="nav-label">Stok</span></button>
 </div>
 
