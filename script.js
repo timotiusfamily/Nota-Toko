@@ -1732,3 +1732,108 @@ function loadNamaToko() {
     });
 }
 // Akhir Kode Lengkap
+// --- Fungsi untuk koneksi Web Bluetooth (Printer Thermal) ---
+let printerDevice;
+let printerCharacteristic;
+
+async function connectToBluetoothPrinter() {
+    try {
+        showTemporaryAlert('Mencari perangkat Bluetooth...', 'green');
+        // Filter untuk menemukan printer thermal umum
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{
+                services: ['000018f0-0000-1000-8000-00805f9b34fb'] // UUID untuk Layanan Printer
+            }],
+            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+        // Karakteristik umum untuk printer thermal ESC/POS
+        const characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb'); 
+        
+        printerDevice = device;
+        printerCharacteristic = characteristic;
+        
+        showTemporaryAlert(`Berhasil terhubung ke ${device.name}!`, 'green');
+        return true;
+    } catch (error) {
+        console.error("Web Bluetooth Error:", error);
+        showTemporaryAlert('Gagal terhubung ke printer. Pastikan Bluetooth aktif dan printer terdeteksi.', 'red');
+        return false;
+    }
+}
+
+async function printThermal() {
+    // Gunakan data struk yang tersimpan di variabel global
+    if (!currentStrukData) {
+        showTemporaryAlert('Tidak ada struk untuk dicetak.', 'red');
+        return;
+    }
+    
+    // Periksa apakah sudah terhubung. Jika belum, coba hubungkan.
+    if (!printerDevice || !printerDevice.gatt.connected) {
+        const success = await connectToBluetoothPrinter();
+        if (!success) {
+            return;
+        }
+    }
+    
+    try {
+        // Helper untuk menggabungkan Uint8Array
+        const concatenate = (a, b) => {
+            const result = new Uint8Array(a.length + b.length);
+            result.set(a, 0);
+            result.set(b, a.length);
+            return result;
+        };
+
+        // Perintah ESC/POS
+        let printerCommands = new Uint8Array([0x1B, 0x40]); // ESC @ - Initialize printer
+        
+        // Nama Toko (ukuran besar, tengah)
+        printerCommands = concatenate(printerCommands, new Uint8Array([0x1B, 0x61, 0x01, 0x1D, 0x21, 0x11])); // Center, Double Height & Width
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode((currentStrukData.toko || 'NAMA TOKO').toUpperCase() + '\n'));
+        
+        // Reset dan align kiri
+        printerCommands = concatenate(printerCommands, new Uint8Array([0x1D, 0x21, 0x00, 0x1B, 0x61, 0x00])); // Normal font, Left align
+
+        // Informasi Transaksi
+        const infoStruk = `--------------------------------\n` +
+                          `Tgl: ${currentStrukData.tanggal}\n` +
+                          `Pembeli: ${currentStrukData.pembeli || 'Pelanggan'}\n` +
+                          `--------------------------------\n`;
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode(infoStruk));
+
+        // Daftar Barang
+        currentStrukData.items.forEach(item => {
+            const itemName = item.nama.padEnd(16); // Atur padding agar rapi
+            const itemTotal = formatRupiah(item.jumlah).padStart(16);
+            const line1 = `${itemName}${itemTotal}\n`;
+            const line2 = `  ${item.qty} x ${formatRupiah(item.hargaSatuan)}\n`;
+            printerCommands = concatenate(printerCommands, new TextEncoder().encode(line1 + line2));
+        });
+
+        // Total
+        const totalText = "TOTAL:".padEnd(16);
+        const totalValue = formatRupiah(currentStrukData.totalPenjualan).padStart(16);
+        const totalStruk = `--------------------------------\n` +
+                           `${totalText}${totalValue}\n` +
+                           `--------------------------------\n\n`;
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode(totalStruk));
+        
+        // Pesan penutup (tengah)
+        printerCommands = concatenate(printerCommands, new Uint8Array([0x1B, 0x61, 0x01])); // Center align
+        const closingMessage = `Terima kasih!\n\n\n`;
+        printerCommands = concatenate(printerCommands, new TextEncoder().encode(closingMessage));
+        
+        // Mengirim data ke printer
+        await printerCharacteristic.writeValue(printerCommands);
+        
+        showTemporaryAlert('Struk berhasil dicetak!', 'green');
+
+    } catch (error) {
+        console.error("Print Error:", error);
+        showTemporaryAlert('Gagal mencetak. Error: ' + error.message, 'red');
+    }
+}
