@@ -326,7 +326,7 @@ function tambahAtauUpdateBarangPenjualan() {
     if (masterItem) {
         masteritem.sellPrice = hargaSatuan;
     } else {
-        masterItems.push({ name: namaBarang, item.sellPrice: hargaSatuan, buyPrice: hargaBeli, stock: 0 });
+        masterItems.push({ name: namaBarang, price: hargaSatuan, purchasePrice: hargaBeli, stock: 0 });
     }
     saveDataToFirestore();
 
@@ -612,7 +612,7 @@ async function tambahAtauUpdateBarangPembelian() {
             
             if(masterItemIndex > -1) {
                 const masterItem = masterItems[masterItemIndex];
-                const totalOldValue = (masterItem.stock) * masterItem.buyPrice;
+                const totalOldValue = (masterItem.stock) * masterItem.purchasePrice;
                 masterItem.stock += jumlahKuantitas;
                 masteritem.buyPrice= (totalOldValue + (jumlahKuantitas * hargaBeli)) / (masterItem.stock);
             }
@@ -628,17 +628,17 @@ async function tambahAtauUpdateBarangPembelian() {
         if (masterItemIndex > -1) {
             const masterItem = masterItems[masterItemIndex];
             const oldStock = masterItem.stock || 0;
-            const oldbuyPrice = masteritem.buyPrice|| 0;
+            const oldPurchasePrice = masteritem.buyPrice|| 0;
             const newStock = oldStock + jumlahKuantitas;
-            const totalValueOld = oldStock * oldbuyPrice;
+            const totalValueOld = oldStock * oldPurchasePrice;
             const totalValueNew = jumlahKuantitas * hargaBeli;
-            const newbuyPrice = (totalValueOld + totalValueNew) / newStock;
+            const newPurchasePrice = (totalValueOld + totalValueNew) / newStock;
             
             masterItem.stock = newStock;
-            masteritem.buyPrice= newbuyPrice;
+            masteritem.buyPrice= newPurchasePrice;
             masteritem.sellPrice = hargaJual;
         } else {
-            masterItems.push({ name: namaBarang, price: hargaJual, buyPrice: hargaBeli, stock: jumlahKuantitas });
+            masterItems.push({ name: namaBarang, price: hargaJual, purchasePrice: hargaBeli, stock: jumlahKuantitas });
         }
     }
     await saveDataToFirestore();
@@ -774,14 +774,14 @@ function shareViaWhatsAppPembelian() {
 }
 
 // --- Master Items Management ---
-async function addOrUpdateMasterItem(name, sellingPrice, buyPrice, stockChange = 0) {
+async function addOrUpdateMasterItem(name, sellingPrice, purchasePrice, stockChange = 0) {
     const existingItemIndex = masterItems.findIndex(item => item.name.toLowerCase() === name.toLowerCase());
     if (existingItemIndex > -1) {
         masterItems[existingItemIndex].price = sellingPrice;
-        masterItems[existingItemIndex].buyPrice = buyPrice;
+        masterItems[existingItemIndex].purchasePrice = purchasePrice;
         masterItems[existingItemIndex].stock = (masterItems[existingItemIndex].stock || 0) + stockChange;
     } else {
-        masterItems.push({ name: name, price: sellingPrice, buyPrice: buyPrice, stock: stockChange });
+        masterItems.push({ name: name, price: sellingPrice, purchasePrice: purchasePrice, stock: stockChange });
     }
     await saveDataToFirestore();
     renderMasterItems();
@@ -823,7 +823,7 @@ function editMasterItemInModal(index) {
         editingMasterItemIndex = index;
         document.getElementById('editMasterItemName').value = item.name;
         document.getElementById('editMasterItemSellingPrice').value = item.sellPrice;
-        document.getElementById('editMasterItembuyPrice').value = item.buyPrice;
+        document.getElementById('editMasterItemPurchasePrice').value = item.purchasePrice;
         document.getElementById('editMasterItemStock').value = item.stock;
         document.getElementById('editMasterItemModal').style.display = 'flex';
     }
@@ -834,10 +834,10 @@ async function saveEditedMasterItem() {
     
     const name = document.getElementById('editMasterItemName').value.trim();
     const sellingPrice = parseInt(document.getElementById('editMasterItemSellingPrice').value);
-    const buyPrice = parseInt(document.getElementById('editMasterItembuyPrice').value);
+    const purchasePrice = parseInt(document.getElementById('editMasterItemPurchasePrice').value);
     const stock = parseInt(document.getElementById('editMasterItemStock').value);
     
-    if (!name || isNaN(sellingPrice) || isNaN(buyPrice) || isNaN(stock)) {
+    if (!name || isNaN(sellingPrice) || isNaN(purchasePrice) || isNaN(stock)) {
         showTemporaryAlert('Mohon lengkapi semua field.', 'red');
         return;
     }
@@ -845,7 +845,7 @@ async function saveEditedMasterItem() {
     masterItems[editingMasterItemIndex] = {
         name: name,
         price: sellingPrice,
-        buyPrice: buyPrice,
+        purchasePrice: purchasePrice,
         stock: stock
     };
     
@@ -899,10 +899,10 @@ function showSuggestions(type) {
             inputElement.value = item.name;
             if (type === 'penjualan') {
                 document.getElementById('hargaSatuanPenjualan').value = item.sellPrice;
-                document.getElementById('hargaBeliPenjualan').value = item.buyPrice;
+                document.getElementById('hargaBeliPenjualan').value = item.purchasePrice;
                 document.getElementById('jumlahKuantitasPenjualan').focus();
             } else {
-                document.getElementById('hargaBeliPembelian').value = item.buyPrice;
+                document.getElementById('hargaBeliPembelian').value = item.purchasePrice;
                 document.getElementById('hargaJualPembelian').value = item.sellPrice;
                 document.getElementById('jumlahKuantitasPembelian').focus();
             }
@@ -947,21 +947,21 @@ function renderModalMasterItems() {
         const selectButton = document.createElement('button');
         selectButton.innerText = 'Pilih';
         selectButton.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        selectButton.onclick = () => selectMasterItemFromModal(item.name, item.sellPrice, item.buyPrice);
+        selectButton.onclick = () => selectMasterItemFromModal(item.name, item.sellPrice, item.purchasePrice);
         selectCell.appendChild(selectButton);
     });
 }
 document.getElementById('masterItemSearchInput').addEventListener('input', renderModalMasterItems);
 
-function selectMasterItemFromModal(name, sellingPrice, buyPrice) {
+function selectMasterItemFromModal(name, sellingPrice, purchasePrice) {
     if (currentTransactionType === 'penjualan') {
         document.getElementById('namaBarangPenjualan').value = name;
         document.getElementById('hargaSatuanPenjualan').value = sellingPrice;
-        document.getElementById('hargaBeliPenjualan').value = buyPrice;
+        document.getElementById('hargaBeliPenjualan').value = purchasePrice;
         document.getElementById('jumlahKuantitasPenjualan').focus();
     } else if (currentTransactionType === 'pembelian') {
         document.getElementById('namaBarangPembelian').value = name;
-        document.getElementById('hargaBeliPembelian').value = buyPrice;
+        document.getElementById('hargaBeliPembelian').value = purchasePrice;
         document.getElementById('hargaJualPembelian').value = sellingPrice;
         document.getElementById('jumlahKuantitasPembelian').value = '';
         document.getElementById('jumlahKuantitasPembelian').focus();
