@@ -10,9 +10,9 @@ let itemCounter = 0;
 let editingItemId = null;
 let masterItems = [];
 let userId = null;
-let currentStrukData = null; // Variabel global untuk menyimpan data struk sementara
-let editingMasterItemIndex = null; // Variabel global untuk menyimpan indeks item yang sedang diedit
-let currentDetailedSales = []; // NEW: Variabel global untuk detail laporan penjualan
+let currentStrukData = null; 
+let editingMasterItem = null; // PERBAIKAN: Menyimpan objek item, bukan index
+let currentDetailedSales = [];
 
 // --- PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
@@ -29,12 +29,10 @@ if ('serviceWorker' in navigator) {
 
 // --- Initialization on DOMContentLoaded ---
 document.addEventListener('DOMContentLoaded', (event) => {
-    // Cek status autentikasi Firebase
     auth.onAuthStateChanged(async (user) => {
         if (user) {
             userId = user.uid;
             
-            // Inisialisasi variabel untuk memastikan tidak ada kesalahan "is not defined"
             salesHistory = [];
             purchaseHistory = [];
             pendingSales = [];
@@ -65,7 +63,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
             document.getElementById('historyFilterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('historyFilterEndDate').value = formattedDate;
 
-            // NEW: Event listener untuk tabel laporan penjualan
             document.getElementById('dailySalesList').addEventListener('click', (event) => {
                 const row = event.target.closest('tr');
                 if (row && row.cells.length > 1) {
@@ -81,15 +78,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 
 // --- Firebase and Firestore Management ---
-// --- GANTI FUNGSI LAMA DENGAN INI ---
 async function loadDataFromFirestore() {
     try {
-        // Mengambil data produk dari koleksi terpusat '/products'
-        const productsSnapshot = await db.collection('products').get();
+        const productsSnapshot = await db.collection('products').orderBy('name').get();
         masterItems = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log("Master items loaded from /products collection.");
+        console.log("Master items loaded from /products collection:", masterItems);
 
-        // Mengambil data spesifik user (riwayat, dll) dari '/users/{userId}'
         const userDocRef = db.collection('users').doc(userId);
         const userDoc = await userDocRef.get();
         if (userDoc.exists) {
@@ -105,25 +99,61 @@ async function loadDataFromFirestore() {
         renderDashboard();
     } catch (error) {
         console.error("Error loading data:", error);
-        showMessageBox("Gagal memuat data dari server. Coba muat ulang halaman.");
+        showMessageBox("Gagal memuat data dari server. Coba muat ulang halaman. Pastikan AdBlocker tidak aktif.");
     }
 }
 
-async function saveDataToFirestore() {
+// PERBAIKAN: Fungsi ini sekarang HANYA menyimpan data spesifik user
+async function saveUserDataToFirestore() {
     try {
         const docRef = db.collection('users').doc(userId);
         await docRef.set({
-            masterItems: masterItems,
             salesHistory: salesHistory,
             purchaseHistory: purchaseHistory,
             pendingSales: pendingSales
         }, { merge: true });
-        console.log("Data berhasil disimpan ke Firestore.");
+        console.log("User data (history, pending) saved to Firestore.");
     } catch (error) {
-        console.error("Error saving data:", error);
-        showMessageBox("Gagal menyimpan data ke server. Periksa koneksi internet Anda.");
+        console.error("Error saving user data:", error);
+        showMessageBox("Gagal menyimpan data riwayat ke server.");
     }
 }
+
+// FUNGSI BARU: Untuk menambah item baru ke koleksi /products
+async function addMasterItemToFirestore(itemData) {
+    try {
+        const docRef = await db.collection('products').add(itemData);
+        console.log("New master item added with ID:", docRef.id);
+        return { id: docRef.id, ...itemData }; // Return the full new object with its ID
+    } catch (error) {
+        console.error("Error adding master item:", error);
+        showMessageBox("Gagal menambah barang baru ke database.");
+        return null;
+    }
+}
+
+// FUNGSI BARU: Untuk mengupdate item yang ada di koleksi /products
+async function updateMasterItemInFirestore(itemId, dataToUpdate) {
+    try {
+        await db.collection('products').doc(itemId).update(dataToUpdate);
+        console.log(`Master item ${itemId} updated.`);
+    } catch (error) {
+        console.error(`Error updating master item ${itemId}:`, error);
+        showMessageBox("Gagal memperbarui data barang di database.");
+    }
+}
+
+// FUNGSI BARU: Untuk menghapus item dari koleksi /products
+async function deleteMasterItemFromFirestore(itemId) {
+    try {
+        await db.collection('products').doc(itemId).delete();
+        console.log(`Master item ${itemId} deleted.`);
+    } catch (error) {
+        console.error(`Error deleting master item ${itemId}:`, error);
+        showMessageBox("Gagal menghapus barang dari database.");
+    }
+}
+
 
 function logout() {
     auth.signOut().then(() => {
@@ -136,6 +166,7 @@ function logout() {
 
 // --- Utility Functions ---
 function formatRupiah(angka) {
+    if (isNaN(angka) || angka === null) return 'Rp. 0';
     let reverse = String(angka).split('').reverse().join('');
     let ribuan = reverse.match(/\d{1,3}/g);
     let result = ribuan.join('.').split('').reverse().join('');
@@ -245,7 +276,7 @@ function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
         renderPendingSales();
     } else if (sectionId === 'profitLoss') {
         generateProfitLossReport();
-    } else if (sectionId === 'salesReport') { // NEW: Tab Laporan Penjualan
+    } else if (sectionId === 'salesReport') {
         generateSalesReport();
     } else if (sectionId === 'stock') {
         generateStockReport();
@@ -259,29 +290,25 @@ function renderDashboard() {
     let totalPurchasesToday = 0;
     let totalStockValue = 0;
 
-    // Mendapatkan tanggal hari ini dalam format YYYY-MM-DD
     const today = new Date();
     const formattedToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    // Filter transaksi penjualan hari ini
     const salesToday = salesHistory.filter(struk => struk.tanggal === formattedToday);
     salesToday.forEach(struk => {
         totalSalesToday += struk.totalPenjualan || 0;
         totalProfitToday += struk.totalLabaRugi || 0;
     });
 
-    // Filter transaksi pembelian hari ini
     const purchasesToday = purchaseHistory.filter(struk => struk.tanggal === formattedToday);
     purchasesToday.forEach(struk => {
         totalPurchasesToday += struk.totalPembelian || 0;
     });
 
-    // Menghitung nilai total stok (kumulatif, tidak diubah)
+    // PERBAIKAN: Gunakan `buyPrice` untuk kalkulasi nilai stok
     masterItems.forEach(item => {
-        totalStockValue += (item.stock || 0) * (item.buyPrice|| 0);
+        totalStockValue += (item.stock || 0) * (item.buyPrice || 0);
     });
 
-    // Memperbarui elemen HTML dengan data harian
     document.getElementById('dashboardTotalSales').innerText = formatRupiah(totalSalesToday);
     document.getElementById('dashboardTotalProfit').innerText = formatRupiah(totalProfitToday);
     document.getElementById('dashboardTotalPurchases').innerText = formatRupiah(totalPurchasesToday);
@@ -295,7 +322,7 @@ function tambahAtauUpdateBarangPenjualan() {
     const hargaBeli = parseInt(document.getElementById('hargaBeliPenjualan').value || '0');
 
     if (!namaBarang || isNaN(jumlahKuantitas) || isNaN(hargaSatuan)) {
-        showTemporaryAlert('Mohon lengkapi Nama Barang, Kuantitas, dan Harga Satuan.', 'red');
+        showTemporaryAlert('Mohon lengkapi Nama Barang, Kuantitas, dan Harga Jual.', 'red');
         return;
     }
     if (jumlahKuantitas <= 0 || hargaSatuan < 0 || hargaBeli < 0) {
@@ -314,7 +341,7 @@ function tambahAtauUpdateBarangPenjualan() {
             currentItems[itemIndex] = { ...currentItems[itemIndex], nama: namaBarang, qty: jumlahKuantitas, hargaSatuan: hargaSatuan, hargaBeli: hargaBeli, jumlah: jumlah, labaRugi: labaRugi };
         }
         editingItemId = null;
-        document.getElementById('btnAddUpdatePenjualan').innerText = 'Update Barang';
+        document.getElementById('btnAddUpdatePenjualan').innerText = 'Tambah Barang';
         document.getElementById('btnCancelEditPenjualan').style.display = 'none';
     } else {
         itemCounter++;
@@ -322,13 +349,8 @@ function tambahAtauUpdateBarangPenjualan() {
         currentItems.push(newItem);
     }
     
-    const masterItem = masterItems.find(mi => mi.name.toLowerCase() === namaBarang.toLowerCase());
-    if (masterItem) {
-        masteritem.sellPrice = hargaSatuan;
-    } else {
-        masterItems.push({ name: namaBarang, price: hargaSatuan, purchasePrice: hargaBeli, stock: 0 });
-    }
-    saveDataToFirestore();
+    // Logika ini dipindahkan ke 'selesaikanPembayaran' dan 'simpanNotaPembelian'
+    // agar data master hanya diupdate saat transaksi benar-benar selesai.
 
     hitungUlangTotal('penjualan');
     renderTablePenjualan();
@@ -397,9 +419,8 @@ function renderTablePenjualan() {
     });
 }
 
-// FUNGSI REVISI
 function renderStrukPreviewPenjualan(strukData) {
-    currentStrukData = strukData; // Simpan data struk ke variabel global
+    currentStrukData = strukData; 
 
     const namaToko = strukData.toko || 'Nama Toko';
     const tanggal = strukData.tanggal;
@@ -418,19 +439,22 @@ function renderStrukPreviewPenjualan(strukData) {
     document.getElementById('strukOutputPenjualan').innerHTML = strukHTML;
 }
 
-// FUNGSI REVISI
 async function selesaikanPembayaran() {
     if (currentItems.length === 0) {
         showTemporaryAlert('Tambahkan barang terlebih dahulu.', 'red');
         return;
     }
 
-    currentItems.forEach(item => {
-        const masterItem = masterItems.find(mi => mi.name === item.nama);
+    // PERBAIKAN: Update stok di Firestore dan di array masterItems lokal
+    for (const item of currentItems) {
+        const masterItem = masterItems.find(mi => mi.name.toLowerCase() === item.nama.toLowerCase());
         if (masterItem) {
-            masterItem.stock -= item.qty;
+            const newStock = (masterItem.stock || 0) - item.qty;
+            masterItem.stock = newStock; // Update lokal
+            await updateMasterItemInFirestore(masterItem.id, { stock: newStock }); // Update Firestore
         }
-    });
+    }
+    renderMasterItems(); // Tampilkan ulang master list dengan stok terbaru
 
     const namaToko = document.getElementById('namaToko').value || 'Nama Toko';
     const tanggal = document.getElementById('tanggalPenjualan').value;
@@ -447,21 +471,17 @@ async function selesaikanPembayaran() {
     };
 
     salesHistory.push(newStruk);
-    await saveDataToFirestore();
+    await saveUserDataToFirestore();
 
-    // Render struk dan simpan data ke variabel global
     renderStrukPreviewPenjualan(newStruk);
     document.getElementById('printerCard').style.display = 'block';
 
-    // Pemicu download otomatis
     downloadStrukJPG();
     
-    showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk akan diunduh otomatis!', 'green');
-
-    generateStockReport(); // MODIFIED: Panggil setelah perubahan stok
+    showTemporaryAlert('Pembayaran berhasil dan struk akan diunduh!', 'green');
+    generateStockReport();
 }
 
-// FUNGSI REVISI untuk membuat dan mengunduh struk sebagai JPG
 function downloadStrukJPG() {
     const strukOutput = document.getElementById('strukOutputPenjualan');
     if (!strukOutput || !strukOutput.innerHTML.trim()) {
@@ -469,76 +489,58 @@ function downloadStrukJPG() {
         return;
     }
 
-    // Menggunakan html2canvas untuk mengubah elemen struk menjadi canvas
     html2canvas(strukOutput, {
-        scale: 3, // Meningkatkan resolusi gambar untuk kualitas yang lebih baik
-        backgroundColor: '#ffffff' // Menghilangkan latar belakang transparan
+        scale: 3, 
+        backgroundColor: '#ffffff'
     }).then(canvas => {
-        // Mengubah canvas menjadi format blob (Binary Large Object)
         canvas.toBlob(function(blob) {
-            // Menggunakan FileSaver.js untuk memicu dialog unduhan
             const fileName = `struk_penjualan_${new Date().toISOString().slice(0, 10)}.jpg`;
             saveAs(blob, fileName);
             showTemporaryAlert('Struk berhasil diunduh sebagai JPG!', 'green');
-        }, 'image/jpeg', 0.9); // Mengatur format dan kualitas JPG
+        }, 'image/jpeg', 0.9);
     }).catch(error => {
         console.error("Gagal membuat gambar dari canvas:", error);
         showTemporaryAlert('Gagal mengunduh struk JPG.', 'red');
     });
 }
 
-// ==========================================================
-// FUNGSI BARU UNTUK MENCETAK STRUK VIA ANDROID
-// ==========================================================
+
 function cetakStruk() {
-    // Gunakan variabel global 'currentStrukData' yang sudah disimpan
-    // saat tombol "Selesaikan Pembayaran" ditekan.
     if (!currentStrukData) {
-        showTemporaryAlert('Tidak ada data struk untuk dicetak. Selesaikan pembayaran terlebih dahulu.', 'red');
+        showTemporaryAlert('Tidak ada data struk untuk dicetak.', 'red');
         return;
     }
 
     const struk = currentStrukData;
     let receiptText = "";
-
-    // Helper untuk membuat teks rata tengah (asumsi lebar kertas 32 karakter)
     const centerText = (text) => {
         const width = 32;
         if (text.length >= width) return text;
         const spaces = Math.floor((width - text.length) / 2);
         return ' '.repeat(spaces) + text;
     };
-    
-    // Helper untuk membuat baris dengan teks kiri dan kanan
     const createLine = (left, right) => {
         const width = 32;
         const spaces = width - left.length - right.length;
         return left + ' '.repeat(spaces > 0 ? spaces : 1) + right;
     };
     
-    // Membangun teks struk
-    receiptText += centerText(struk.toko || 'NAMA TOKO') + '\n';
-    receiptText += '\n'; // spasi
+    receiptText += centerText(struk.toko || 'NAMA TOKO') + '\n\n';
     receiptText += `Tgl: ${struk.tanggal}\n`;
     receiptText += `Pembeli: ${struk.pembeli || 'Pelanggan'}\n`;
     receiptText += '--------------------------------\n';
-
     struk.items.forEach(item => {
         receiptText += `${item.nama}\n`;
         const hargaLine = `${item.qty} x ${item.hargaSatuan.toLocaleString('id-ID')}`;
         receiptText += createLine(hargaLine, item.jumlah.toLocaleString('id-ID')) + '\n';
     });
-    
     receiptText += '--------------------------------\n';
-    receiptText += createLine('TOTAL:', struk.totalPenjualan.toLocaleString('id-ID')) + '\n';
-    receiptText += '\n';
+    receiptText += createLine('TOTAL:', struk.totalPenjualan.toLocaleString('id-ID')) + '\n\n';
     receiptText += centerText('Terima Kasih') + '\n';
     
-    // Memanggil "jembatan" ke aplikasi Android
     if (typeof Android !== 'undefined' && Android.print) {
         Android.print(receiptText);
     } else {
-        // Pesan ini akan muncul jika dibuka di browser biasa
         showTemporaryAlert("Fitur cetak hanya tersedia di aplikasi Android.", 'red');
         console.log("--- Struk untuk Dicetak ---");
         console.log(receiptText);
@@ -546,37 +548,23 @@ function cetakStruk() {
 }
 
 
-// FUNGSI REVISI untuk membagikan struk via WhatsApp
 function shareViaWhatsAppPenjualan() {
-    // Ambil data dari variabel global
     if (!currentStrukData) {
-        showTemporaryAlert('Tidak ada struk untuk dibagikan. Silakan selesaikan pembayaran terlebih dahulu.', 'red');
+        showTemporaryAlert('Tidak ada struk untuk dibagikan.', 'red');
         return;
     }
 
-    // Siapkan pesan teks yang berisi semua detail struk
     const namaToko = currentStrukData.toko || 'Nama Toko';
     const tanggal = currentStrukData.tanggal;
     const namaPembeli = currentStrukData.pembeli || 'Pelanggan Yth.';
     const totalPenjualan = formatRupiah(currentStrukData.totalPenjualan);
 
-    let message = `*NOTA PENJUALAN*\n\n`;
-    message += `*${namaToko}*\n`;
-    message += `Tgl: ${tanggal}\n`;
-    message += `Pembeli: ${namaPembeli}\n`;
-    message += `--------------------------------\n`;
-    message += `*Daftar Barang:*\n`;
-
-    // Gunakan map dan join untuk memastikan semua item masuk dalam string
+    let message = `*NOTA PENJUALAN*\n\n*${namaToko}*\nTgl: ${tanggal}\nPembeli: ${namaPembeli}\n--------------------------------\n*Daftar Barang:*\n`;
     message += currentStrukData.items.map(item => 
         `${item.nama} (${item.qty} x ${formatRupiah(item.hargaSatuan)}) = ${formatRupiah(item.jumlah)}`
     ).join('\n');
+    message += `\n--------------------------------\n*TOTAL: ${totalPenjualan}*\n\n_Terima kasih telah berbelanja!_`;
 
-    message += `\n--------------------------------\n`;
-    message += `*TOTAL: ${totalPenjualan}*\n\n`;
-    message += `_Terima kasih telah berbelanja!_`;
-
-    // Buka WhatsApp dengan pesan teks yang sudah disiapkan
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 }
 
@@ -588,7 +576,7 @@ async function tambahAtauUpdateBarangPembelian() {
     const hargaJual = parseInt(document.getElementById('hargaJualPembelian').value);
 
     if (!namaBarang || isNaN(jumlahKuantitas) || isNaN(hargaBeli) || isNaN(hargaJual)) {
-        showTemporaryAlert('Mohon lengkapi semua field: Nama Barang, Kuantitas, Harga Beli, dan Harga Jual.', 'red');
+        showTemporaryAlert('Lengkapi semua field: Nama, Kuantitas, Harga Beli, dan Harga Jual.', 'red');
         return;
     }
     if (jumlahKuantitas <= 0 || hargaBeli < 0 || hargaJual < 0) {
@@ -597,56 +585,87 @@ async function tambahAtauUpdateBarangPembelian() {
     }
     
     const jumlah = jumlahKuantitas * hargaBeli;
-    const masterItemIndex = masterItems.findIndex(mi => mi.name.toLowerCase() === namaBarang.toLowerCase());
 
     if (editingItemId !== null) {
         const itemIndex = currentItems.findIndex(item => item.id === editingItemId);
         if (itemIndex > -1) {
-            const oldQty = currentItems[itemIndex].qty;
-            const oldName = currentItems[itemIndex].nama;
-            
-            const oldMasterItem = masterItems.find(mi => mi.name === oldName);
-            if(oldMasterItem) oldMasterItem.stock -= oldQty;
-
-            currentItems[itemIndex] = { ...currentItems[itemIndex], nama: namaBarang, qty: jumlahKuantitas, hargaBeli: hargaBeli, jumlah: jumlah };
-            
-            if(masterItemIndex > -1) {
-                const masterItem = masterItems[masterItemIndex];
-                const totalOldValue = (masterItem.stock) * masterItem.purchasePrice;
-                masterItem.stock += jumlahKuantitas;
-                masteritem.buyPrice= (totalOldValue + (jumlahKuantitas * hargaBeli)) / (masterItem.stock);
-            }
+            currentItems[itemIndex] = { ...currentItems[itemIndex], nama: namaBarang, qty: jumlahKuantitas, hargaBeli: hargaBeli, hargaJual: hargaJual, jumlah: jumlah };
         }
         editingItemId = null;
-        document.getElementById('btnAddUpdatePembelian').innerText = 'Update Barang';
+        document.getElementById('btnAddUpdatePembelian').innerText = 'Tambah Barang';
         document.getElementById('btnCancelEditPembelian').style.display = 'none';
     } else {
         itemCounter++;
         const newItem = { id: itemCounter, nama: namaBarang, qty: jumlahKuantitas, hargaBeli: hargaBeli, jumlah: jumlah, hargaJual: hargaJual };
         currentItems.push(newItem);
-
-        if (masterItemIndex > -1) {
-            const masterItem = masterItems[masterItemIndex];
-            const oldStock = masterItem.stock || 0;
-            const oldPurchasePrice = masteritem.buyPrice|| 0;
-            const newStock = oldStock + jumlahKuantitas;
-            const totalValueOld = oldStock * oldPurchasePrice;
-            const totalValueNew = jumlahKuantitas * hargaBeli;
-            const newPurchasePrice = (totalValueOld + totalValueNew) / newStock;
-            
-            masterItem.stock = newStock;
-            masteritem.buyPrice= newPurchasePrice;
-            masteritem.sellPrice = hargaJual;
-        } else {
-            masterItems.push({ name: namaBarang, price: hargaJual, purchasePrice: hargaBeli, stock: jumlahKuantitas });
-        }
     }
-    await saveDataToFirestore();
+    
     hitungUlangTotal('pembelian');
     renderTablePembelian();
     clearBarangInputs('pembelian');
 }
 
+async function simpanNotaPembelian() {
+    if (currentItems.length === 0) {
+        showTemporaryAlert('Tidak ada barang untuk disimpan.', 'red');
+        return;
+    }
+    
+    // PERBAIKAN: Update stok dan harga di Firestore
+    for (const item of currentItems) {
+        let masterItem = masterItems.find(mi => mi.name.toLowerCase() === item.nama.toLowerCase());
+        if (masterItem) { // Jika barang sudah ada
+            const oldStock = masterItem.stock || 0;
+            const oldBuyPrice = masterItem.buyPrice || 0;
+            const newStock = oldStock + item.qty;
+            // Hitung harga beli rata-rata (weighted average)
+            const newBuyPrice = ((oldStock * oldBuyPrice) + (item.qty * item.hargaBeli)) / newStock;
+            
+            masterItem.stock = newStock;
+            masterItem.buyPrice = Math.round(newBuyPrice); // Pembulatan
+            masterItem.sellPrice = item.hargaJual;
+
+            await updateMasterItemInFirestore(masterItem.id, {
+                stock: newStock,
+                buyPrice: Math.round(newBuyPrice),
+                sellPrice: item.hargaJual
+            });
+        } else { // Jika barang baru
+            const newItemData = {
+                name: item.nama,
+                sellPrice: item.hargaJual,
+                buyPrice: item.hargaBeli,
+                stock: item.qty
+            };
+            const addedItem = await addMasterItemToFirestore(newItemData);
+            if (addedItem) {
+                masterItems.push(addedItem); // Tambahkan item baru ke array lokal
+            }
+        }
+    }
+    renderMasterItems();
+
+    const tanggal = document.getElementById('tanggalPembelian').value;
+    const namaSupplier = document.getElementById('namaSupplier').value || 'Supplier Umum';
+    const newStruk = {
+        id: Date.now(),
+        tanggal: tanggal,
+        supplier: namaSupplier,
+        items: JSON.parse(JSON.stringify(currentItems)),
+        totalPembelian: currentGrandTotalPembelian
+    };
+    purchaseHistory.push(newStruk);
+    await saveUserDataToFirestore();
+
+    renderStrukPreviewPembelian(newStruk);
+    document.getElementById('strukOutputPembelian').style.display = 'block';
+    document.getElementById('shareButtonsPembelian').style.display = 'flex';
+    
+    showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
+    // resetCurrentTransaction('pembelian'); // Uncomment jika ingin form langsung kosong
+}
+
+// ... (sisa fungsi pembelian seperti edit, delete, renderTable, dll. tidak perlu diubah signifikan)
 function editBarangPembelian(id) {
     const itemToEdit = currentItems.find(item => item.id === id);
     if (itemToEdit) {
@@ -663,14 +682,8 @@ function editBarangPembelian(id) {
 
 function deleteBarangPembelian(id) {
     showMessageBox('Apakah Anda yakin ingin menghapus barang ini?', true, async () => {
-        const deletedItem = currentItems.find(item => item.id === id);
-        if (deletedItem) {
-            const masterItem = masterItems.find(mi => mi.name === deletedItem.nama);
-            if (masterItem) {
-                masterItem.stock -= deletedItem.qty;
-            }
-            await saveDataToFirestore();
-        }
+        // Logika ini kompleks karena harus mengembalikan stok. 
+        // Untuk saat ini, kita hanya hapus dari nota saat ini, tidak dari master.
         currentItems = currentItems.filter(item => item.id !== id);
         hitungUlangTotal('pembelian');
         renderTablePembelian();
@@ -715,31 +728,6 @@ function renderTablePembelian() {
     });
 }
 
-async function simpanNotaPembelian() {
-    if (currentItems.length === 0) {
-        showTemporaryAlert('Tidak ada barang untuk disimpan.', 'red');
-        return;
-    }
-    const tanggal = document.getElementById('tanggalPembelian').value;
-    const namaSupplier = document.getElementById('namaSupplier').value || 'Supplier Umum';
-    const newStruk = {
-        id: Date.now(),
-        tanggal: tanggal,
-        supplier: namaSupplier,
-        items: JSON.parse(JSON.stringify(currentItems)),
-        totalPembelian: currentGrandTotalPembelian
-    };
-    purchaseHistory.push(newStruk);
-    await saveDataToFirestore();
-    renderStrukPreviewPembelian(newStruk);
-    document.getElementById('strukOutputPembelian').style.display = 'block';
-    document.getElementById('shareButtonsPembelian').style.display = 'flex'; // Pastikan tombol muncul
-    
-    // Tampilkan notifikasi non-blokir
-    showTemporaryAlert('Nota pembelian berhasil disimpan!', 'green');
-
-}
-
 function renderStrukPreviewPembelian(strukData) {
     const namaToko = document.getElementById('namaToko').value || 'Nama Toko';
     const tanggal = strukData.tanggal;
@@ -773,21 +761,8 @@ function shareViaWhatsAppPembelian() {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 }
 
-// --- Master Items Management ---
-async function addOrUpdateMasterItem(name, sellingPrice, purchasePrice, stockChange = 0) {
-    const existingItemIndex = masterItems.findIndex(item => item.name.toLowerCase() === name.toLowerCase());
-    if (existingItemIndex > -1) {
-        masterItems[existingItemIndex].price = sellingPrice;
-        masterItems[existingItemIndex].purchasePrice = purchasePrice;
-        masterItems[existingItemIndex].stock = (masterItems[existingItemIndex].stock || 0) + stockChange;
-    } else {
-        masterItems.push({ name: name, price: sellingPrice, purchasePrice: purchasePrice, stock: stockChange });
-    }
-    await saveDataToFirestore();
-    renderMasterItems();
-    renderModalMasterItems();
-}
 
+// --- Master Items Management ---
 function renderMasterItems() {
     const masterItemsListBody = document.querySelector('#masterItemsList');
     masterItemsListBody.innerHTML = '';
@@ -795,42 +770,45 @@ function renderMasterItems() {
         masterItemsListBody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-gray-500">Belum ada barang master.</td></tr>';
         return;
     }
-    masterItems.forEach((item, index) => {
+    // PERBAIKAN: Sortir masterItems berdasarkan nama secara alfabetis sebelum dirender
+    const sortedItems = [...masterItems].sort((a, b) => a.name.localeCompare(b.name));
+    
+    sortedItems.forEach(item => {
         const row = masterItemsListBody.insertRow();
         row.classList.add('hover:bg-gray-50');
         row.insertCell(0).innerText = item.name;
+        // PERBAIKAN: Gunakan properti yang konsisten
         row.insertCell(1).innerText = formatRupiah(item.sellPrice || 0);
-        row.insertCell(2).innerText = formatRupiah(item.buyPrice|| 0);
+        row.insertCell(2).innerText = formatRupiah(item.buyPrice || 0);
         row.insertCell(3).innerText = item.stock || 0;
         const actionCell = row.insertCell(4);
         actionCell.classList.add('master-item-actions', 'flex', 'gap-2', 'py-2');
         const editButton = document.createElement('button');
         editButton.innerText = 'Edit';
         editButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        editButton.onclick = () => editMasterItemInModal(index); // Panggil fungsi baru
+        editButton.onclick = () => editMasterItemInModal(item);
         actionCell.appendChild(editButton);
         const deleteButton = document.createElement('button');
         deleteButton.innerText = 'Hapus';
         deleteButton.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        deleteButton.onclick = () => deleteMasterItem(index);
+        deleteButton.onclick = () => deleteMasterItem(item);
         actionCell.appendChild(deleteButton);
     });
 }
 
-function editMasterItemInModal(index) {
-    const item = masterItems[index];
+function editMasterItemInModal(item) {
     if (item) {
-        editingMasterItemIndex = index;
+        editingMasterItem = item; // Simpan seluruh objek
         document.getElementById('editMasterItemName').value = item.name;
         document.getElementById('editMasterItemSellingPrice').value = item.sellPrice;
-        document.getElementById('editMasterItemPurchasePrice').value = item.purchasePrice;
+        document.getElementById('editMasterItemPurchasePrice').value = item.buyPrice;
         document.getElementById('editMasterItemStock').value = item.stock;
         document.getElementById('editMasterItemModal').style.display = 'flex';
     }
 }
 
 async function saveEditedMasterItem() {
-    if (editingMasterItemIndex === null) return;
+    if (!editingMasterItem) return;
     
     const name = document.getElementById('editMasterItemName').value.trim();
     const sellingPrice = parseInt(document.getElementById('editMasterItemSellingPrice').value);
@@ -842,14 +820,22 @@ async function saveEditedMasterItem() {
         return;
     }
     
-    masterItems[editingMasterItemIndex] = {
+    const updatedData = {
         name: name,
-        price: sellingPrice,
-        purchasePrice: purchasePrice,
+        sellPrice: sellingPrice,
+        buyPrice: purchasePrice,
         stock: stock
     };
     
-    await saveDataToFirestore();
+    // Update Firestore
+    await updateMasterItemInFirestore(editingMasterItem.id, updatedData);
+
+    // Update array lokal
+    const itemIndex = masterItems.findIndex(item => item.id === editingMasterItem.id);
+    if (itemIndex > -1) {
+        masterItems[itemIndex] = { id: editingMasterItem.id, ...updatedData };
+    }
+    
     renderMasterItems();
     closeEditMasterItemModal();
     showTemporaryAlert('Barang master berhasil diperbarui.', 'green');
@@ -857,23 +843,26 @@ async function saveEditedMasterItem() {
 
 function closeEditMasterItemModal() {
     document.getElementById('editMasterItemModal').style.display = 'none';
-    editingMasterItemIndex = null;
+    editingMasterItem = null;
 }
 
-function deleteMasterItem(index) {
-    showMessageBox(`Yakin ingin menghapus "${masterItems[index].name}"?`, true, async () => {
-        masterItems.splice(index, 1);
-        await saveDataToFirestore();
+function deleteMasterItem(itemToDelete) {
+    showMessageBox(`Yakin ingin menghapus "${itemToDelete.name}"?`, true, async () => {
+        await deleteMasterItemFromFirestore(itemToDelete.id);
+        masterItems = masterItems.filter(item => item.id !== itemToDelete.id); // Hapus dari array lokal
         renderMasterItems();
         renderModalMasterItems();
         showTemporaryAlert('Barang master berhasil dihapus.', 'green');
     });
 }
 
-function clearMasterItems() {
-    showMessageBox('Yakin ingin menghapus SEMUA daftar barang master?', true, async () => {
-        masterItems = [];
-        await saveDataToFirestore();
+async function clearMasterItems() {
+    showMessageBox('Yakin ingin menghapus SEMUA daftar barang master? Tindakan ini tidak bisa dibatalkan.', true, async () => {
+        // PERBAIKAN: Hapus satu per satu dari Firestore
+        for (const item of masterItems) {
+            await deleteMasterItemFromFirestore(item.id);
+        }
+        masterItems = []; // Kosongkan array lokal
         renderMasterItems();
         renderModalMasterItems();
         showTemporaryAlert('Semua barang master telah dihapus.', 'green');
@@ -893,16 +882,19 @@ function showSuggestions(type) {
     filteredItems.forEach(item => {
         const suggestionItem = document.createElement('div');
         suggestionItem.classList.add('p-2', 'cursor-pointer', 'hover:bg-gray-100', 'border-b', 'border-gray-200');
-        suggestionItem.innerText = `${item.name} (Jual: ${formatRupiah(item.sellPrice || 0)} | Beli: ${formatRupiah(item.buyPrice|| 0)})`;
+        // PERBAIKAN: Tampilkan data yang konsisten
+        suggestionItem.innerText = `${item.name} (Jual: ${formatRupiah(item.sellPrice || 0)} | Beli: ${formatRupiah(item.buyPrice || 0)})`;
         suggestionItem.addEventListener('mousedown', (e) => {
             e.preventDefault();
             inputElement.value = item.name;
             if (type === 'penjualan') {
+                // PERBAIKAN: Gunakan properti yang benar
                 document.getElementById('hargaSatuanPenjualan').value = item.sellPrice;
-                document.getElementById('hargaBeliPenjualan').value = item.purchasePrice;
+                document.getElementById('hargaBeliPenjualan').value = item.buyPrice;
                 document.getElementById('jumlahKuantitasPenjualan').focus();
             } else {
-                document.getElementById('hargaBeliPembelian').value = item.purchasePrice;
+                // PERBAIKAN: Gunakan properti yang benar
+                document.getElementById('hargaBeliPembelian').value = item.buyPrice;
                 document.getElementById('hargaJualPembelian').value = item.sellPrice;
                 document.getElementById('jumlahKuantitasPembelian').focus();
             }
@@ -940,34 +932,41 @@ function renderModalMasterItems() {
         const row = modalListBody.insertRow();
         row.classList.add('hover:bg-gray-50');
         row.insertCell(0).innerText = item.name;
+        // PERBAIKAN: Properti konsisten
         row.insertCell(1).innerText = formatRupiah(item.sellPrice || 0);
-        row.insertCell(2).innerText = formatRupiah(item.buyPrice|| 0);
+        row.insertCell(2).innerText = formatRupiah(item.buyPrice || 0);
         row.insertCell(3).innerText = item.stock || 0;
         const selectCell = row.insertCell(4);
         const selectButton = document.createElement('button');
         selectButton.innerText = 'Pilih';
         selectButton.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        selectButton.onclick = () => selectMasterItemFromModal(item.name, item.sellPrice, item.purchasePrice);
+        // PERBAIKAN: Kirim properti yang benar
+        selectButton.onclick = () => selectMasterItemFromModal(item.name, item.sellPrice, item.buyPrice);
         selectCell.appendChild(selectButton);
     });
 }
 document.getElementById('masterItemSearchInput').addEventListener('input', renderModalMasterItems);
 
-function selectMasterItemFromModal(name, sellingPrice, purchasePrice) {
+// PERBAIKAN: Nama parameter diubah agar lebih jelas
+function selectMasterItemFromModal(name, sellingPrice, buyingPrice) {
     if (currentTransactionType === 'penjualan') {
         document.getElementById('namaBarangPenjualan').value = name;
         document.getElementById('hargaSatuanPenjualan').value = sellingPrice;
-        document.getElementById('hargaBeliPenjualan').value = purchasePrice;
+        document.getElementById('hargaBeliPenjualan').value = buyingPrice;
         document.getElementById('jumlahKuantitasPenjualan').focus();
     } else if (currentTransactionType === 'pembelian') {
         document.getElementById('namaBarangPembelian').value = name;
-        document.getElementById('hargaBeliPembelian').value = purchasePrice;
+        document.getElementById('hargaBeliPembelian').value = buyingPrice;
         document.getElementById('hargaJualPembelian').value = sellingPrice;
         document.getElementById('jumlahKuantitasPembelian').value = '';
         document.getElementById('jumlahKuantitasPembelian').focus();
     }
     closeMasterItemModal();
 }
+
+// ... Sisa kode (seperti Riwayat, Laporan, dll) sebagian besar tidak perlu diubah,
+// karena mereka membaca dari array salesHistory dan purchaseHistory yang sudah benar.
+// Pastikan semua referensi ke harga beli/jual juga konsisten jika ada.
 
 // --- History, Pending, Profit/Loss, Stock Reports ---
 async function filterHistory() {
@@ -1046,143 +1045,75 @@ function renderFilteredPurchaseHistory(filteredPurchases) {
 
 
 async function clearSalesHistory() {
-    showMessageBox('Yakin ingin menghapus SEMUA riwayat penjualan? Stok tidak dikembalikan.', true, async () => {
+    showMessageBox('Yakin ingin menghapus SEMUA riwayat penjualan? Stok TIDAK akan dikembalikan.', true, async () => {
         salesHistory = [];
-        await saveDataToFirestore();
-        renderSalesHistory();
+        await saveUserDataToFirestore();
+        filterHistory();
         showTemporaryAlert('Semua riwayat penjualan telah dihapus.', 'green');
     });
 }
 async function clearPurchaseHistory() {
-    showMessageBox('Yakin ingin menghapus SEMUA riwayat pembelian? Stok tidak dikembalikan.', true, async () => {
+    showMessageBox('Yakin ingin menghapus SEMUA riwayat pembelian? Stok TIDAK akan dikembalikan.', true, async () => {
         purchaseHistory = [];
-        await saveDataToFirestore();
-        renderPurchaseHistory();
+        await saveUserDataToFirestore();
+        filterHistory();
         showTemporaryAlert('Semua riwayat pembelian telah dihapus.', 'green');
     });
 }
 async function clearPendingSales() {
     showMessageBox('Yakin ingin menghapus SEMUA transaksi pending?', true, async () => {
         pendingSales = [];
-        await saveDataToFirestore();
+        await saveUserDataToFirestore();
         renderPendingSales();
         showTemporaryAlert('Semua transaksi pending telah dihapus.', 'green');
     });
 }
 
-function renderSalesHistory() {
-    const historyListBody = document.querySelector('#salesHistoryListBody');
-    historyListBody.innerHTML = salesHistory.length === 0 ? '<tr><td colspan="6" class="text-center py-4 text-gray-500">Belum ada riwayat penjualan.</td></tr>' : '';
-    salesHistory.forEach(struk => {
-        const row = historyListBody.insertRow();
-        row.classList.add('hover:bg-gray-50');
-        row.insertCell(0).innerText = struk.id;
-        row.insertCell(1).innerText = struk.tanggal;
-        row.insertCell(2).innerText = struk.pembeli;
-        row.insertCell(3).innerText = formatRupiah(struk.totalPenjualan);
-        row.insertCell(4).innerText = formatRupiah(struk.totalLabaRugi || 0);
-        const actionCell = row.insertCell(5);
-        actionCell.classList.add('history-actions', 'flex', 'gap-2', 'py-2');
-        const viewButton = document.createElement('button');
-        viewButton.innerText = 'Lihat';
-        viewButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        viewButton.onclick = () => viewHistoryStruk(struk.id, 'penjualan');
-        actionCell.appendChild(viewButton);
-        const deleteButton = document.createElement('button');
-        deleteButton.innerText = 'Hapus';
-        deleteButton.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        deleteButton.onclick = () => deleteHistoryStruk(struk.id, 'penjualan');
-        actionCell.appendChild(deleteButton);
-    });
-}
-
-function renderPurchaseHistory() {
-    const historyListBody = document.querySelector('#purchaseHistoryListBody');
-    historyListBody.innerHTML = purchaseHistory.length === 0 ? '<tr><td colspan="5" class="text-center py-4 text-gray-500">Belum ada riwayat pembelian.</td></tr>' : '';
-    purchaseHistory.forEach(struk => {
-        const row = historyListBody.insertRow();
-        row.classList.add('hover:bg-gray-50');
-        row.insertCell(0).innerText = struk.id;
-        row.insertCell(1).innerText = struk.tanggal;
-        row.insertCell(2).innerText = struk.supplier;
-        row.insertCell(3).innerText = formatRupiah(struk.totalPembelian);
-        const actionCell = row.insertCell(4);
-        actionCell.classList.add('history-actions', 'flex', 'gap-2', 'py-2');
-        const viewButton = document.createElement('button');
-        viewButton.innerText = 'Lihat';
-        viewButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        viewButton.onclick = () => viewHistoryStruk(struk.id, 'pembelian');
-        actionCell.appendChild(viewButton);
-        const deleteButton = document.createElement('button');
-        deleteButton.innerText = 'Hapus';
-        deleteButton.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        deleteButton.onclick = () => deleteHistoryStruk(struk.id, 'pembelian');
-        actionCell.appendChild(deleteButton);
-    });
-}
-
-function viewHistoryStruk(id, type) {
-    let strukToView;
-    if (type === 'penjualan') {
-        strukToView = salesHistory.find(s => s.id === id);
-        if (strukToView) {
-            document.getElementById('namaToko').value = strukToView.toko || '';
-            document.getElementById('tanggalPenjualan').value = strukToView.tanggal;
-            document.getElementById('namaPembeli').value = strukToView.pembeli;
-            currentItems = JSON.parse(JSON.stringify(strukToView.items));
-            hitungUlangTotal('penjualan');
-            renderTablePenjualan();
-            renderStrukPreviewPenjualan(strukToView);
-            document.getElementById('printerCard').style.display = 'block';
-            showTemporaryAlert(`Menampilkan struk penjualan riwayat dengan ID: ${strukToView.id}`, 'green');
-            showSection('penjualan', document.getElementById('navPenjualan'), true);
-        }
-    } else if (type === 'pembelian') {
-        strukToView = purchaseHistory.find(s => s.id === id);
-        if (strukToView) {
-            document.getElementById('namaToko').value = document.getElementById('namaToko').value || 'Nama Toko';
-            document.getElementById('tanggalPembelian').value = strukToView.tanggal;
-            document.getElementById('namaSupplier').value = strukToView.supplier;
-            currentItems = JSON.parse(JSON.stringify(strukToView.items));
-            hitungUlangTotal('pembelian');
-            renderTablePembelian();
-            renderStrukPreviewPembelian(strukToView);
-            document.getElementById('strukOutputPembelian').style.display = 'block';
-            showTemporaryAlert(`Menampilkan nota pembelian riwayat dengan ID: ${strukToView.id}`, 'green');
-            showSection('pembelian', document.getElementById('navPembelian'), true);
-        }
-    }
-}
+// ... Sisa kode tidak perlu diubah secara signifikan
 
 async function deleteHistoryStruk(id, type) {
-    showMessageBox(`Yakin ingin menghapus struk ${type} ini?`, true, async () => {
+    showMessageBox(`Yakin ingin menghapus struk ${type} ini? Stok akan dikembalikan/dikurangi.`, true, async () => {
         if (type === 'penjualan') {
-            const deletedStruk = salesHistory.find(s => s.id === id);
-            if (deletedStruk && deletedStruk.items) {
-                deletedStruk.items.forEach(item => {
-                    const masterItem = masterItems.find(mi => mi.name === item.nama);
-                    if (masterItem) masterItem.stock += item.qty;
-                });
+            const strukIndex = salesHistory.findIndex(s => s.id === id);
+            if (strukIndex > -1) {
+                const deletedStruk = salesHistory[strukIndex];
+                if (deletedStruk && deletedStruk.items) {
+                    for(const item of deletedStruk.items) {
+                        const masterItem = masterItems.find(mi => mi.name === item.nama);
+                        if (masterItem) {
+                            const newStock = masterItem.stock + item.qty;
+                            await updateMasterItemInFirestore(masterItem.id, {stock: newStock});
+                            masterItem.stock = newStock;
+                        }
+                    }
+                }
+                salesHistory.splice(strukIndex, 1);
+                showTemporaryAlert('Struk penjualan berhasil dihapus & stok dikembalikan.', 'green');
             }
-            salesHistory = salesHistory.filter(s => s.id !== id);
-            renderSalesHistory();
-            showTemporaryAlert('Struk penjualan berhasil dihapus.', 'green');
         } else if (type === 'pembelian') {
-            const deletedStruk = purchaseHistory.find(s => s.id === id);
-            if (deletedStruk && deletedStruk.items) {
-                deletedStruk.items.forEach(item => {
-                    const masterItem = masterItems.find(mi => mi.name === item.nama);
-                    if (masterItem) masterItem.stock -= item.qty;
-                });
+             const strukIndex = purchaseHistory.findIndex(s => s.id === id);
+            if (strukIndex > -1) {
+                const deletedStruk = purchaseHistory[strukIndex];
+                if (deletedStruk && deletedStruk.items) {
+                    for(const item of deletedStruk.items) {
+                        const masterItem = masterItems.find(mi => mi.name === item.nama);
+                        if (masterItem) {
+                            const newStock = masterItem.stock - item.qty;
+                             await updateMasterItemInFirestore(masterItem.id, {stock: newStock});
+                            masterItem.stock = newStock;
+                        }
+                    }
+                }
+                purchaseHistory.splice(strukIndex, 1);
+                showTemporaryAlert('Nota pembelian berhasil dihapus & stok dikurangi.', 'green');
             }
-            purchaseHistory = purchaseHistory.filter(s => s.id !== id);
-            renderPurchaseHistory();
-            showTemporaryAlert('Nota pembelian berhasil dihapus.', 'green');
         }
-        await saveDataToFirestore();
+        await saveUserDataToFirestore();
         renderMasterItems();
+        filterHistory();
     });
 }
+
 
 function renderPendingSales() {
     const pendingSalesListBody = document.querySelector('#pendingSalesList');
@@ -1221,7 +1152,7 @@ async function loadPendingTransaction(id) {
         showSection('penjualan', document.getElementById('navPenjualan'), true);
         showTemporaryAlert(`Transaksi pending dengan ID ${id} dimuat. Lanjutkan pembayaran.`, 'green');
         pendingSales = pendingSales.filter(t => t.id !== id);
-        await saveDataToFirestore();
+        await saveUserDataToFirestore();
         renderPendingSales();
     }
 }
@@ -1229,404 +1160,52 @@ async function loadPendingTransaction(id) {
 async function deletePendingTransaction(id) {
     showMessageBox('Yakin ingin menghapus transaksi pending ini?', true, async () => {
         pendingSales = pendingSales.filter(t => t.id !== id);
-        await saveDataToFirestore();
+        await saveUserDataToFirestore();
         renderPendingSales();
         showTemporaryAlert('Transaksi pending berhasil dihapus.', 'green');
     });
 }
 
-// MODIFIED: Fungsi untuk Laporan Rugi Laba (hanya ringkasan)
 function generateProfitLossReport() {
-    // MODIFIED: Menggunakan filter khusus untuk laba rugi
-    const startDate = document.getElementById('filterStartDate').value;
-    const endDate = document.getElementById('filterEndDate').value;
-    const filterItemName = document.getElementById('filterItemName').value.toLowerCase();
-    
-    let filteredSalesHistory = salesHistory.filter(struk => {
-        const strukDate = struk.tanggal;
-        return (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
-    });
-    
-    if (filterItemName) {
-        filteredSalesHistory = filteredSalesHistory.filter(struk => struk.items.some(item => item.nama.toLowerCase().includes(filterItemName)));
-    }
-    
-    const dailyProfitLoss = {};
-    filteredSalesHistory.forEach(struk => {
-        const date = struk.tanggal;
-        if (!dailyProfitLoss[date]) dailyProfitLoss[date] = { totalPenjualan: 0, totalHargaBeli: 0, labaRugi: 0 };
-        dailyProfitLoss[date].totalPenjualan += struk.totalPenjualan;
-        let totalBeliTransaksi = struk.items.reduce((sum, item) => sum + (item.qty * (item.hargaBeli || 0)), 0);
-        dailyProfitLoss[date].totalHargaBeli += totalBeliTransaksi;
-        dailyProfitLoss[date].labaRugi += struk.totalLabaRugi;
-    });
-
-    const dailyProfitLossList = document.getElementById('dailyProfitLossList');
-    dailyProfitLossList.innerHTML = '';
-    let overallTotalFilteredProfitLoss = 0;
-    
-    const reportTitle = document.getElementById('profitLossReportTitle');
-    if (filterItemName) {
-        reportTitle.innerText = `Rugi Laba Harian (Barang: ${document.getElementById('filterItemName').value})`;
-    } else {
-        reportTitle.innerText = `Rugi Laba Harian`;
-    }
-
-    Object.keys(dailyProfitLoss).sort().forEach(date => {
-        const data = dailyProfitLoss[date];
-        const row = dailyProfitLossList.insertRow();
-        row.classList.add('hover:bg-gray-50');
-        row.insertCell(0).innerText = date;
-        row.insertCell(1).innerText = formatRupiah(data.totalPenjualan);
-        row.insertCell(2).innerText = formatRupiah(data.totalHargaBeli);
-        row.insertCell(3).innerText = formatRupiah(data.labaRugi);
-        overallTotalFilteredProfitLoss += data.labaRugi;
-    });
-    if (Object.keys(dailyProfitLoss).length === 0) dailyProfitLossList.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Tidak ada data.</td></tr>';
-    document.getElementById('totalFilteredProfitLoss').innerText = formatRupiah(overallTotalFilteredProfitLoss);
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function shareProfitLossViaWhatsApp() {
-    const startDate = document.getElementById('filterStartDate').value;
-    const endDate = document.getElementById('filterEndDate').value;
-    const filterItemName = document.getElementById('filterItemName').value.trim();
-
-    let message = `*Laporan Rugi Laba*\n`;
-    if (startDate && endDate) {
-        message += `Periode: ${startDate} s/d ${endDate}\n`;
-    }
-    if (filterItemName) {
-        message += `Nama Barang: ${filterItemName}\n`;
-    }
-    message += `\n`;
-    
-    const reportTable = document.getElementById('dailyProfitLossList');
-    for (let i = 0; i < reportTable.rows.length; i++) {
-        const row = reportTable.rows[i];
-        if (row.cells.length > 1) { 
-            const date = row.cells[0].innerText;
-            const labaRugi = row.cells[3].innerText;
-            message += `Tanggal ${date}: ${labaRugi}\n`;
-        }
-    }
-
-    const totalProfit = document.getElementById('totalFilteredProfitLoss').innerText;
-    message += `\n*TOTAL LABA/RUGI: ${totalProfit}*\n`;
-    message += `\n_Dibuat dengan Aplikasi Nota & Stok_`;
-    
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
-// Perbaikan untuk fungsi download PDF
 function downloadProfitLossPDF() {
-    const element = document.getElementById('profitLossReportContainer');
-    html2pdf(element, {
-        margin: 10,
-        filename: `Laporan_Rugi_Laba_${new Date().toISOString().slice(0,10)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).then(() => {
-        showTemporaryAlert('Laporan Rugi Laba berhasil diunduh!', 'green');
-    }).catch(error => {
-        console.error("PDF generation failed:", error);
-        showTemporaryAlert('Gagal mengunduh Laporan Rugi Laba PDF.', 'red');
-    });
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
-// NEW: Fungsi-fungsi untuk Laporan Penjualan (detail)
 function generateSalesReport() {
-    const startDate = document.getElementById('salesFilterStartDate').value;
-    const endDate = document.getElementById('salesFilterEndDate').value;
-    const filterName = document.getElementById('salesFilterName').value.toLowerCase();
-    
-    let filteredSales = salesHistory.filter(struk => {
-        const strukDate = struk.tanggal;
-        const dateMatch = (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
-        const nameMatch = !filterName || (struk.pembeli && struk.pembeli.toLowerCase().includes(filterName));
-        return dateMatch && nameMatch;
-    });
-
-    // MODIFIED: Menggabungkan data penjualan dan pembelian ke dalam laporan penjualan
-    const reportData = {};
-    let overallTotalSales = 0;
-
-    // Proses data penjualan
-    filteredSales.forEach(struk => {
-        const date = struk.tanggal;
-        if (!reportData[date]) {
-            reportData[date] = {
-                sales: [],
-                purchases: [],
-                totalPenjualan: 0,
-                totalLabaRugi: 0,
-                totalPembelian: 0
-            };
-        }
-        reportData[date].sales.push(struk);
-        reportData[date].totalPenjualan += struk.totalPenjualan;
-        reportData[date].totalLabaRugi += struk.totalLabaRugi;
-        overallTotalSales += struk.totalPenjualan;
-    });
-
-    // Proses data pembelian (untuk menampilkan di laporan yang sama)
-    purchaseHistory.filter(struk => {
-        const strukDate = struk.tanggal;
-        const dateMatch = (!startDate || strukDate >= startDate) && (!endDate || strukDate <= endDate);
-        const nameMatch = !filterName || (struk.supplier && struk.supplier.toLowerCase().includes(filterName));
-        return dateMatch && nameMatch;
-    }).forEach(struk => {
-        const date = struk.tanggal;
-        if (!reportData[date]) {
-            reportData[date] = {
-                sales: [],
-                purchases: [],
-                totalPenjualan: 0,
-                totalLabaRugi: 0,
-                totalPembelian: 0
-            };
-        }
-        reportData[date].purchases.push(struk);
-        reportData[date].totalPembelian += struk.totalPembelian;
-    });
-
-
-    const dailySalesList = document.getElementById('dailySalesList');
-    dailySalesList.innerHTML = '';
-    
-    Object.keys(reportData).sort().forEach(date => {
-        const data = reportData[date];
-        const row = dailySalesList.insertRow();
-        row.classList.add('hover:bg-gray-50', 'cursor-pointer');
-        row.insertCell(0).innerText = date;
-        row.insertCell(1).innerText = formatRupiah(data.totalPenjualan);
-        row.insertCell(2).innerText = formatRupiah(data.totalLabaRugi);
-        const actionCell = row.insertCell(3);
-        const viewButton = document.createElement('button');
-        viewButton.innerText = 'Lihat Detail';
-        viewButton.classList.add('bg-blue-500', 'hover:bg-blue-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        viewButton.onclick = () => showSalesDetails(date);
-        actionCell.appendChild(viewButton);
-    });
-    
-    if (Object.keys(reportData).length === 0) dailySalesList.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Tidak ada data.</td></tr>';
-    document.getElementById('totalFilteredSales').innerText = formatRupiah(overallTotalSales);
-
-    hideSalesDetails();
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
-// MODIFIED: Fungsi untuk menampilkan detail penjualan dan pembelian
 function showSalesDetails(date) {
-    const detailContainer = document.getElementById('salesDetailContainer');
-    const detailContent = document.getElementById('salesDetailContent');
-    document.getElementById('salesDetailDate').innerText = date;
-    
-    // Ambil data penjualan dan pembelian untuk tanggal yang dipilih
-    const salesForDate = salesHistory.filter(struk => struk.tanggal === date);
-    const purchasesForDate = purchaseHistory.filter(struk => struk.tanggal === date);
-    
-    currentDetailedSales = { sales: salesForDate, purchases: purchasesForDate, date: date };
-    
-    detailContent.innerHTML = '';
-
-    let totalSalesHarian = 0;
-    let totalLabaHarian = 0;
-    let totalPembelianHarian = 0;
-    
-    if (salesForDate.length > 0) {
-        detailContent.innerHTML += `<h4 class="text-lg font-bold mb-2">Detail Penjualan:</h4>`;
-        salesForDate.forEach(struk => {
-            let salesHtml = `
-                <div class="border-b border-dashed border-gray-300 mb-4 pb-4">
-                    <p class="font-bold">ID Nota: ${struk.id}</p>
-                    <p>Pembeli: ${struk.pembeli || 'Pelanggan Yth.'}</p>
-                    <p>Total Penjualan: ${formatRupiah(struk.totalPenjualan)}</p>
-                    <p class="mb-2">Total Laba/Rugi: ${formatRupiah(struk.totalLabaRugi)}</p>
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="py-2 px-1 text-left">Nama</th>
-                                <th class="py-2 px-1 text-left">Qty</th>
-                                <th class="py-2 px-1 text-left">Harga Jual</th>
-                                <th class="py-2 px-1 text-left">Laba/Rugi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            struk.items.forEach(item => {
-                salesHtml += `
-                            <tr>
-                                <td class="py-1 px-1">${item.nama}</td>
-                                <td class="py-1 px-1">${item.qty}</td>
-                                <td class="py-1 px-1">${formatRupiah(item.hargaSatuan)}</td>
-                                <td class="py-1 px-1">${formatRupiah(item.labaRugi)}</td>
-                            </tr>
-                `;
-            });
-            salesHtml += `</tbody></table></div>`;
-            detailContent.innerHTML += salesHtml;
-            totalSalesHarian += struk.totalPenjualan;
-            totalLabaHarian += struk.totalLabaRugi;
-        });
-    }
-
-    if (purchasesForDate.length > 0) {
-        detailContent.innerHTML += `<h4 class="text-lg font-bold mb-2">Detail Pembelian:</h4>`;
-        purchasesForDate.forEach(struk => {
-            let purchaseHtml = `
-                <div class="border-b border-dashed border-gray-300 mb-4 pb-4">
-                    <p class="font-bold">ID Nota: ${struk.id}</p>
-                    <p>Supplier: ${struk.supplier || 'Supplier Yth.'}</p>
-                    <p class="mb-2">Total Pembelian: ${formatRupiah(struk.totalPembelian)}</p>
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="py-2 px-1 text-left">Nama</th>
-                                <th class="py-2 px-1 text-left">Qty</th>
-                                <th class="py-2 px-1 text-left">Harga Beli</th>
-                                <th class="py-2 px-1 text-left">Jumlah</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            struk.items.forEach(item => {
-                purchaseHtml += `
-                            <tr>
-                                <td class="py-1 px-1">${item.nama}</td>
-                                <td class="py-1 px-1">${item.qty}</td>
-                                <td class="py-1 px-1">${formatRupiah(item.hargaBeli)}</td>
-                                <td class="py-1 px-1">${formatRupiah(item.jumlah)}</td>
-                            </tr>
-                `;
-            });
-            purchaseHtml += `</tbody></table></div>`;
-            detailContent.innerHTML += purchaseHtml;
-            totalPembelianHarian += struk.totalPembelian;
-        });
-    }
-    
-    if (salesForDate.length === 0 && purchasesForDate.length === 0) {
-        detailContent.innerHTML = `<p class="text-center text-gray-500">Tidak ada detail transaksi untuk tanggal ini.</p>`;
-    }
-
-    document.getElementById('salesReportContainer').classList.add('hidden');
-    detailContainer.classList.remove('hidden');
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function hideSalesDetails() {
-    document.getElementById('salesDetailContainer').classList.add('hidden');
-    document.getElementById('salesReportContainer').classList.remove('hidden');
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function shareSalesReportViaWhatsApp() {
-    const startDate = document.getElementById('salesFilterStartDate').value;
-    const endDate = document.getElementById('salesFilterEndDate').value;
-    const filterName = document.getElementById('salesFilterName').value.trim();
-
-    let message = `*Laporan Penjualan*\n`;
-    if (startDate && endDate) {
-        message += `Periode: ${startDate} s/d ${endDate}\n`;
-    }
-    if (filterName) {
-        message += `Nama Pembeli: ${filterName}\n`;
-    }
-    message += `\n`;
-    
-    const reportTable = document.getElementById('dailySalesList');
-    for (let i = 0; i < reportTable.rows.length; i++) {
-        const row = reportTable.rows[i];
-        if (row.cells.length > 1) { 
-            const date = row.cells[0].innerText;
-            const totalPenjualan = row.cells[1].innerText;
-            const totalLabaRugi = row.cells[2].innerText;
-            message += `Tanggal ${date}: Total Jual: ${totalPenjualan}, Laba: ${totalLabaRugi}\n`;
-        }
-    }
-
-    const totalSales = document.getElementById('totalFilteredSales').innerText;
-    message += `\n*TOTAL PENJUALAN: ${totalSales}*\n`;
-    message += `\n_Dibuat dengan Aplikasi Nota & Stok_`;
-    
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function downloadSalesReportPDF() {
-    const element = document.getElementById('salesReportContainer');
-    html2pdf(element, {
-        margin: 10,
-        filename: `Laporan_Penjualan_${new Date().toISOString().slice(0,10)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).then(() => {
-        showTemporaryAlert('Laporan Penjualan berhasil diunduh!', 'green');
-    }).catch(error => {
-        console.error("PDF generation failed:", error);
-        showTemporaryAlert('Gagal mengunduh Laporan Penjualan PDF.', 'red');
-    });
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function shareSalesDetailsViaWhatsApp() {
-    if (currentDetailedSales.length === 0) {
-        showTemporaryAlert('Tidak ada detail transaksi untuk dibagikan.', 'red');
-        return;
-    }
-
-    let message = `*Detail Transaksi Tanggal ${currentDetailedSales.date}*\n\n`;
-
-    if (currentDetailedSales.sales.length > 0) {
-        message += `*Detail Penjualan:*\n`;
-        currentDetailedSales.sales.forEach(struk => {
-            message += `_Nota ID: ${struk.id}, Pembeli: ${struk.pembeli || 'Pelanggan Yth.'}, Total Jual: ${formatRupiah(struk.totalPenjualan)}, Laba: ${formatRupiah(struk.totalLabaRugi)}_ \n`;
-            struk.items.forEach(item => {
-                message += `${item.nama} (${item.qty} x ${formatRupiah(item.hargaSatuan)}) = ${formatRupiah(item.jumlah)} (Laba: ${formatRupiah(item.labaRugi)})\n`;
-            });
-        });
-        message += `\n`;
-    }
-
-    if (currentDetailedSales.purchases.length > 0) {
-        message += `*Detail Pembelian:*\n`;
-        currentDetailedSales.purchases.forEach(struk => {
-            message += `_Nota ID: ${struk.id}, Supplier: ${struk.supplier || 'Supplier Yth.'}, Total Beli: ${formatRupiah(struk.totalPembelian)}_ \n`;
-            struk.items.forEach(item => {
-                message += `${item.nama} (${item.qty} x ${formatRupiah(item.hargaBeli)}) = ${formatRupiah(item.jumlah)}\n`;
-            });
-        });
-        message += `\n`;
-    }
-
-    message += `_Dibuat dengan Aplikasi Nota & Stok_`;
-
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function downloadSalesDetailsPDF() {
-    if (currentDetailedSales.length === 0) {
-        showTemporaryAlert('Tidak ada detail transaksi untuk diunduh.', 'red');
-        return;
-    }
-    
-    // MODIFIED: Menggunakan ID elemen detail penjualan
-    const element = document.getElementById('salesDetailContent');
-    const filename = `Detail_Transaksi_${currentDetailedSales.date}.pdf`;
-    
-    html2pdf(element, {
-        margin: 10,
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).then(() => {
-        showTemporaryAlert('Detail transaksi berhasil diunduh!', 'green');
-    }).catch(error => {
-        console.error("PDF generation failed:", error);
-        showTemporaryAlert('Gagal mengunduh detail PDF.', 'red');
-    });
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
-
-// Laporan Stok Barang
 function generateStockReport() {
     const stockReportList = document.getElementById('stockReportList');
     stockReportList.innerHTML = '';
@@ -1636,283 +1215,89 @@ function generateStockReport() {
         stockReportList.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Tidak ada barang yang cocok.</td></tr>';
         return;
     }
-    filteredMasterItems.forEach(item => {
+    const sortedItems = [...filteredMasterItems].sort((a,b) => a.name.localeCompare(b.name));
+    sortedItems.forEach(item => {
         const row = stockReportList.insertRow();
         row.classList.add('hover:bg-gray-50');
         row.insertCell(0).innerText = item.name;
         row.insertCell(1).innerText = item.stock || 0;
         row.insertCell(2).innerText = formatRupiah(item.sellPrice || 0);
-        row.insertCell(3).innerText = formatRupiah(item.buyPrice|| 0);
+        row.insertCell(3).innerText = formatRupiah(item.buyPrice || 0);
     });
 }
 
 function shareStockReportViaWhatsApp() {
-    const stockReportTable = document.getElementById('stockReportList');
-    const filteredName = document.getElementById('stockFilterItemName').value.trim();
-    
-    let message = `*Laporan Stok Barang*\n`;
-    if (filteredName) {
-        message += `Filter: ${filteredName}\n\n`;
-    }
-    
-    for (let i = 0; i < stockReportTable.rows.length; i++) {
-        const row = stockReportTable.rows[i];
-        const namaBarang = row.cells[0].innerText;
-        const stok = row.cells[1].innerText;
-        const hargaJual = row.cells[2].innerText;
-        const hargaBeli = row.cells[3].innerText;
-        
-        message += `Nama: ${namaBarang}\n`;
-        message += `Stok: ${stok}\n`;
-        message += `Harga Jual: ${hargaJual}\n`;
-        message += `Harga Beli: ${hargaBeli}\n\n`;
-    }
-
-    message += `_Dibuat dengan Aplikasi Nota & Stok_`;
-
-    if (message.length > 2000) {
-        showTemporaryAlert('Laporan terlalu panjang untuk WhatsApp, mohon gunakan fitur PDF.', 'red');
-        return;
-    }
-
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
-// Perbaikan untuk fungsi download PDF
 function downloadStockReportPDF() {
-    const element = document.getElementById('stockReportContainer');
-    html2pdf(element, {
-        margin: 10,
-        filename: `Laporan_Stok_Barang_${new Date().toISOString().slice(0,10)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }).then(() => {
-        showTemporaryAlert('Laporan Stok Barang berhasil diunduh!', 'green');
-    }).catch(error => {
-        console.error("PDF generation failed:", error);
-        showTemporaryAlert('Gagal mengunduh Laporan Stok Barang PDF.', 'red');
-    });
-}
-// Backup & Restore
-function backupMasterItems() {
-    if (masterItems.length === 0) {
-        showTemporaryAlert('Tidak ada barang master untuk di-backup.', 'red');
-        return;
-    }
-    const dataStr = JSON.stringify(masterItems, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `master_barang_backup_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showTemporaryAlert('Daftar barang master berhasil di-backup!', 'green');
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
-function restoreMasterItems(event) {
+function backupMasterItems() {
+    // ... (Fungsi ini tidak perlu diubah)
+}
+
+async function restoreMasterItems(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
             const loadedData = JSON.parse(e.target.result);
-            if (Array.isArray(loadedData) && loadedData.every(item => typeof item.name === 'string')) {
-                showMessageBox('Yakin ingin me-restore daftar barang master? Ini akan menimpa data yang ada.', true, async () => {
-                    masterItems = loadedData;
-                    await saveDataToFirestore();
+            // Validasi sederhana
+            if (Array.isArray(loadedData) && loadedData.every(item => typeof item.name === 'string' && typeof item.sellPrice === 'number')) {
+                showMessageBox('Yakin ingin me-restore? Ini akan MENGHAPUS semua barang master yang ada dan menggantinya dengan data dari file.', true, async () => {
+                    // Hapus semua data lama
+                    for(const item of masterItems){
+                        await deleteMasterItemFromFirestore(item.id);
+                    }
+                    
+                    // Tambah data baru
+                    const newItems = [];
+                    for(const item of loadedData){
+                        const newItemData = {
+                            name: item.name,
+                            sellPrice: item.sellPrice || 0,
+                            buyPrice: item.buyPrice || 0,
+                            stock: item.stock || 0
+                        };
+                        const addedItem = await addMasterItemToFirestore(newItemData);
+                        if(addedItem) newItems.push(addedItem);
+                    }
+
+                    masterItems = newItems; // Ganti array lokal dengan data yang baru ditambahkan
+                    
                     renderMasterItems();
                     renderModalMasterItems();
-                    showTemporaryAlert('Daftar barang master berhasil di-restore!', 'green');
+                    showTemporaryAlert('Barang master berhasil di-restore!', 'green');
                 });
             } else {
-                showTemporaryAlert('Format file JSON tidak valid.', 'red');
+                showTemporaryAlert('Format file JSON tidak valid. Pastikan ada properti "name" (string) dan "sellPrice" (number).', 'red');
             }
         } catch (error) {
-            showTemporaryAlert('Gagal membaca atau memproses file JSON. Error: ' + error.message, 'red');
+            showTemporaryAlert('Gagal membaca file JSON. Error: ' + error.message, 'red');
         }
     };
     reader.readAsText(file);
     event.target.value = '';
 }
 
-// Fungsi baru untuk koneksi Web Bluetooth
-let printerDevice;
-let printerCharacteristic;
 
-async function connectToBluetoothPrinter() {
-    try {
-        showTemporaryAlert('Mencari perangkat Bluetooth...', 'green');
-        // Filter untuk menemukan printer thermal umum
-        const device = await navigator.bluetooth.requestDevice({
-            filters: [{
-                services: ['000018f0-0000-1000-8000-00805f9b34fb'] // UUID untuk Layanan Printer
-            }, {
-                services: ['000018f1-0000-1000-8000-00805f9b34fb'] // UUID lain jika diperlukan
-            }, {
-                namePrefix: 'MTP'
-            }, {
-                namePrefix: 'Printer'
-            }, {
-                namePrefix: 'BT-PRINTER'
-            }],
-            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
-        });
-
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-        const characteristic = await service.getCharacteristic('00002af0-0000-1000-8000-00805f9b34fb');
-        
-        printerDevice = device;
-        printerCharacteristic = characteristic;
-        
-        showTemporaryAlert(`Berhasil terhubung ke ${device.name}!`, 'green');
-        return true;
-    } catch (error) {
-        console.error("Web Bluetooth Error:", error);
-        showTemporaryAlert('Gagal terhubung ke printer. Pastikan Bluetooth aktif dan printer terdeteksi.', 'red');
-        return false;
-    }
-}
-
-async function printThermal() {
-    const lastStruk = salesHistory[salesHistory.length - 1];
-    if (!lastStruk) {
-        showTemporaryAlert('Tidak ada struk untuk dicetak.', 'red');
-        return;
-    }
-    
-    // Periksa apakah sudah terhubung. Jika belum, coba hubungkan.
-    if (!printerDevice || !printerDevice.gatt.connected) {
-        const success = await connectToBluetoothPrinter();
-        if (!success) {
-            return;
-        }
-    }
-    
-    try {
-        // Perintah ESC/POS
-        let printerCommands = new Uint8Array([
-            0x1B, 0x40, // ESC @ - Initialize printer
-            0x1B, 0x61, 0x01, // ESC a 1 - Center align
-            0x1B, 0x21, 0x01 // ESC ! 1 - Double height
-        ]);
-        
-        // Nama Toko (ukuran besar)
-        const namaToko = (lastStruk.toko || 'NAMA TOKO').toUpperCase() + '\n';
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(namaToko));
-        
-        // Reset dan align kiri
-        printerCommands = concatenate(printerCommands, new Uint8Array([
-            0x1B, 0x21, 0x00, // ESC ! 0 - Normal font
-            0x1B, 0x61, 0x00, // ESC a 0 - Left align
-        ]));
-
-        // Informasi Transaksi
-        const infoStruk = `--------------------------------\n` +
-                          `Tgl: ${lastStruk.tanggal}\n` +
-                          `Pembeli: ${lastStruk.pembeli || 'Pelanggan'}\n` +
-                          `--------------------------------\n`;
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(infoStruk));
-
-        // Daftar Barang
-        lastStruk.items.forEach(item => {
-            const line = `${item.nama}\n` +
-                         `  ${item.qty} x ${formatRupiah(item.hargaSatuan)}\t${formatRupiah(item.jumlah)}\n`;
-            printerCommands = concatenate(printerCommands, new TextEncoder().encode(line));
-        });
-
-        // Total
-        const totalStruk = `--------------------------------\n` +
-                           `TOTAL:\t\t${formatRupiah(lastStruk.totalPenjualan)}\n` +
-                           `--------------------------------\n\n`;
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(totalStruk));
-        
-        // Pesan penutup
-        const closingMessage = `Terima kasih!\n` +
-                               `Aplikasi Nota & Stok\n\n\n\n`;
-        printerCommands = concatenate(printerCommands, new TextEncoder().encode(closingMessage));
-        
-        // Mengirim data ke printer dalam potongan kecil
-        const chunkSize = 512;
-        for (let i = 0; i < printerCommands.length; i += chunkSize) {
-            const chunk = printerCommands.slice(i, i + chunkSize);
-            await printerCharacteristic.writeValue(chunk);
-        }
-        
-        showTemporaryAlert('Struk berhasil dicetak!', 'green');
-
-    } catch (error) {
-        console.error("Print Error:", error);
-        showTemporaryAlert('Gagal mencetak. Error: ' + error.message, 'red');
-    }
-}
-
-function concatenate(a, b) {
-    const result = new Uint8Array(a.length + b.length);
-    result.set(a, 0);
-    result.set(b, a.length);
-    return result;
-}
-
-// Custom Message Box
 function showMessageBox(message, isConfirm = false, onConfirm = null) {
-    const modal = document.getElementById('customMessageBox');
-    document.getElementById('messageBoxText').innerText = message;
-    const confirmBtn = document.getElementById('messageBoxConfirmBtn');
-    const cancelBtn = document.getElementById('messageBoxCancelBtn');
-    if (isConfirm) {
-    
-        confirmBtn.style.display = 'inline-block';
-        cancelBtn.style.display = 'inline-block';
-        confirmBtn.onclick = () => { closeMessageBox(); if (onConfirm) onConfirm(); };
-        cancelBtn.onclick = () => closeMessageBox();
-    } else {
-        confirmBtn.style.display = 'inline-block';
-        cancelBtn.style.display = 'none';
-        confirmBtn.onclick = () => { closeMessageBox(); if (onConfirm) onConfirm(); };
-    }
-    modal.style.display = 'flex';
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function closeMessageBox() {
-    const modal = document.getElementById('customMessageBox');
-    modal.style.display = 'none';
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
-// Custom Temporary Alert
 function showTemporaryAlert(message, type) {
-    let alertDiv = document.querySelector('.temporary-alert');
-    if (!alertDiv) {
-        alertDiv = document.createElement('div');
-        alertDiv.classList.add('temporary-alert');
-        document.body.appendChild(alertDiv);
-    }
-    alertDiv.innerText = message;
-
-    if (type === 'green') {
-        alertDiv.style.backgroundColor = '#22c55e';
-    } else if (type === 'red') {
-        alertDiv.style.backgroundColor = '#ef4444';
-    }
-
-    alertDiv.style.opacity = '1';
-    
-    // Hilangkan alert setelah 3 detik
-    setTimeout(() => {
-        alertDiv.style.opacity = '0';
-    }, 3000);
+    // ... (Fungsi ini tidak perlu diubah)
 }
 
 function loadNamaToko() {
-    const storedNamaToko = localStorage.getItem('namaToko');
-    if (storedNamaToko) {
-        document.getElementById('namaToko').value = storedNamaToko;
-    }
-    document.getElementById('namaToko').addEventListener('input', () => {
-        localStorage.setItem('namaToko', document.getElementById('namaToko').value);
-    });
+    // ... (Fungsi ini tidak perlu diubah)
 }
+//... Salin semua fungsi yang belum diubah dari script asli Anda ke sini
+// (seperti viewHistoryStruk, generateProfitLossReport, dll.)
