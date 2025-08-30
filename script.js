@@ -81,26 +81,19 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 
 // --- Firebase and Firestore Management ---
-// --- GANTI FUNGSI LAMA DENGAN INI ---
 async function loadDataFromFirestore() {
     try {
-        // Mengambil data produk dari koleksi terpusat '/products'
-        const productsSnapshot = await db.collection('products').get();
-        masterItems = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.log("Master items loaded from /products collection.");
-
-        // Mengambil data spesifik user (riwayat, dll) dari '/users/{userId}'
-        const userDocRef = db.collection('users').doc(userId);
-        const userDoc = await userDocRef.get();
-        if (userDoc.exists) {
-            const userData = userDoc.data();
-            salesHistory = userData.salesHistory || [];
-            purchaseHistory = userData.purchaseHistory || [];
-            pendingSales = userData.pendingSales || [];
+        const docRef = db.collection('users').doc(userId);
+        const doc = await docRef.get();
+        if (doc.exists) {
+            const data = doc.data();
+            masterItems = data.masterItems || [];
+            salesHistory = data.salesHistory || [];
+            purchaseHistory = data.purchaseHistory || [];
+            pendingSales = data.pendingSales || [];
         } else {
-            console.log("No user-specific data found, initializing new data.");
+            console.log("No data found for user, initializing new data.");
         }
-
         renderMasterItems();
         renderDashboard();
     } catch (error) {
@@ -109,19 +102,18 @@ async function loadDataFromFirestore() {
     }
 }
 
-// --- GANTI FUNGSI LAMA DENGAN INI ---
 async function saveDataToFirestore() {
     try {
         const docRef = db.collection('users').doc(userId);
-        // Hanya simpan data yang spesifik untuk user. masterItems sudah tidak disimpan di sini.
         await docRef.set({
+            masterItems: masterItems,
             salesHistory: salesHistory,
             purchaseHistory: purchaseHistory,
             pendingSales: pendingSales
         }, { merge: true });
-        console.log("User data (histories, pending) successfully saved to Firestore.");
+        console.log("Data berhasil disimpan ke Firestore.");
     } catch (error) {
-        console.error("Error saving user data:", error);
+        console.error("Error saving data:", error);
         showMessageBox("Gagal menyimpan data ke server. Periksa koneksi internet Anda.");
     }
 }
@@ -279,7 +271,7 @@ function renderDashboard() {
 
     // Menghitung nilai total stok (kumulatif, tidak diubah)
     masterItems.forEach(item => {
-        totalStockValue += (item.stock || 0) * (item.buyPrice || 0);
+        totalStockValue += (item.stock || 0) * (item.buyPrice|| 0);
     });
 
     // Memperbarui elemen HTML dengan data harian
@@ -420,33 +412,19 @@ function renderStrukPreviewPenjualan(strukData) {
 }
 
 // FUNGSI REVISI
-// --- GANTI FUNGSI LAMA DENGAN INI ---
-// --- GANTI FUNGSI LAMA DENGAN VERSI `async` YANG BENAR INI ---
 async function selesaikanPembayaran() {
     if (currentItems.length === 0) {
         showTemporaryAlert('Tambahkan barang terlebih dahulu.', 'red');
         return;
     }
 
-    const batch = db.batch();
     currentItems.forEach(item => {
         const masterItem = masterItems.find(mi => mi.name === item.nama);
         if (masterItem) {
-            const newStock = (masterItem.stock || 0) - item.qty;
-            const productRef = db.collection('products').doc(masterItem.id);
-            batch.update(productRef, { stock: newStock });
-            masterItem.stock = newStock;
+            masterItem.stock -= item.qty;
         }
     });
 
-    try {
-        await batch.commit();
-    } catch (error) {
-        console.error("Error updating stock:", error);
-        showMessageBox("Gagal memperbarui stok barang.", "red");
-        return;
-    }
-
     const namaToko = document.getElementById('namaToko').value || 'Nama Toko';
     const tanggal = document.getElementById('tanggalPenjualan').value;
     const namaPembeli = document.getElementById('namaPembeli').value || 'Pelanggan Yth.';
@@ -464,48 +442,16 @@ async function selesaikanPembayaran() {
     salesHistory.push(newStruk);
     await saveDataToFirestore();
 
+    // Render struk dan simpan data ke variabel global
     renderStrukPreviewPenjualan(newStruk);
     document.getElementById('printerCard').style.display = 'block';
 
+    // Pemicu download otomatis
     downloadStrukJPG();
+    
+    showTemporaryAlert('Pembayaran berhasil diselesaikan dan struk akan diunduh otomatis!', 'green');
 
-    showTemporaryAlert('Pembayaran berhasil diselesaikan dan stok diperbarui!', 'green');
-
-    generateStockReport();
-}
-    try {
-        await batch.commit();
-    } catch (error) {
-        console.error("Error updating stock:", error);
-        showMessageBox("Gagal memperbarui stok barang.", "red");
-        return;
-    }
-
-    const namaToko = document.getElementById('namaToko').value || 'Nama Toko';
-    const tanggal = document.getElementById('tanggalPenjualan').value;
-    const namaPembeli = document.getElementById('namaPembeli').value || 'Pelanggan Yth.';
-
-    const newStruk = {
-        id: Date.now(),
-        tanggal: tanggal,
-        pembeli: namaPembeli,
-        toko: namaToko,
-        items: JSON.parse(JSON.stringify(currentItems)),
-        totalPenjualan: currentGrandTotalPenjualan,
-        totalLabaRugi: currentGrandTotalLabaRugi
-    };
-
-    salesHistory.push(newStruk);
-    await saveDataToFirestore();
-
-    renderStrukPreviewPenjualan(newStruk);
-    document.getElementById('printerCard').style.display = 'block';
-
-    downloadStrukJPG();
-
-    showTemporaryAlert('Pembayaran berhasil diselesaikan dan stok diperbarui!', 'green');
-
-    generateStockReport();
+    generateStockReport(); // MODIFIED: Panggil setelah perubahan stok
 }
 
 // FUNGSI REVISI untuk membuat dan mengunduh struk sebagai JPG
@@ -659,9 +605,9 @@ async function tambahAtauUpdateBarangPembelian() {
             
             if(masterItemIndex > -1) {
                 const masterItem = masterItems[masterItemIndex];
-                const totalOldValue = (masterItem.stock) * masteritem.buyPrice;
+                const totalOldValue = (masterItem.stock) * masterItem.purchasePrice;
                 masterItem.stock += jumlahKuantitas;
-                masteritem.buyPrice = (totalOldValue + (jumlahKuantitas * hargaBeli)) / (masterItem.stock);
+                masteritem.buyPrice= (totalOldValue + (jumlahKuantitas * hargaBeli)) / (masterItem.stock);
             }
         }
         editingItemId = null;
@@ -675,14 +621,14 @@ async function tambahAtauUpdateBarangPembelian() {
         if (masterItemIndex > -1) {
             const masterItem = masterItems[masterItemIndex];
             const oldStock = masterItem.stock || 0;
-            const oldPurchasePrice = masteritem.buyPrice || 0;
+            const oldPurchasePrice = masteritem.buyPrice|| 0;
             const newStock = oldStock + jumlahKuantitas;
             const totalValueOld = oldStock * oldPurchasePrice;
             const totalValueNew = jumlahKuantitas * hargaBeli;
             const newPurchasePrice = (totalValueOld + totalValueNew) / newStock;
             
             masterItem.stock = newStock;
-            masteritem.buyPrice = newPurchasePrice;
+            masteritem.buyPrice= newPurchasePrice;
             masteritem.sellPrice = hargaJual;
         } else {
             masterItems.push({ name: namaBarang, price: hargaJual, purchasePrice: hargaBeli, stock: jumlahKuantitas });
@@ -847,7 +793,7 @@ function renderMasterItems() {
         row.classList.add('hover:bg-gray-50');
         row.insertCell(0).innerText = item.name;
         row.insertCell(1).innerText = formatRupiah(item.sellPrice || 0);
-        row.insertCell(2).innerText = formatRupiah(item.buyPrice || 0);
+        row.insertCell(2).innerText = formatRupiah(item.buyPrice|| 0);
         row.insertCell(3).innerText = item.stock || 0;
         const actionCell = row.insertCell(4);
         actionCell.classList.add('master-item-actions', 'flex', 'gap-2', 'py-2');
@@ -870,42 +816,24 @@ function editMasterItemInModal(index) {
         editingMasterItemIndex = index;
         document.getElementById('editMasterItemName').value = item.name;
         document.getElementById('editMasterItemSellingPrice').value = item.sellPrice;
-        document.getElementById('editMasterItemPurchasePrice').value = item.buyPrice;
+        document.getElementById('editMasterItemPurchasePrice').value = item.purchasePrice;
         document.getElementById('editMasterItemStock').value = item.stock;
         document.getElementById('editMasterItemModal').style.display = 'flex';
     }
 }
 
-// --- GANTI FUNGSI LAMA DENGAN INI ---
 async function saveEditedMasterItem() {
     if (editingMasterItemIndex === null) return;
-
-    const itemToSave = masterItems[editingMasterItemIndex];
-    const itemId = itemToSave.id;
-
-    const updatedData = {
-        name: document.getElementById('editMasterItemName').value.trim(),
-        sellPrice: parseInt(document.getElementById('editMasterItemSellingPrice').value),
-        buyPrice: parseInt(document.getElementById('editMasterItemPurchasePrice').value),
-        stock: parseInt(document.getElementById('editMasterItemStock').value)
-    };
-
-    if (!updatedData.name || isNaN(updatedData.sellPrice) || isNaN(updatedData.buyPrice) || isNaN(updatedData.stock)) {
+    
+    const name = document.getElementById('editMasterItemName').value.trim();
+    const sellingPrice = parseInt(document.getElementById('editMasterItemSellingPrice').value);
+    const purchasePrice = parseInt(document.getElementById('editMasterItemPurchasePrice').value);
+    const stock = parseInt(document.getElementById('editMasterItemStock').value);
+    
+    if (!name || isNaN(sellingPrice) || isNaN(purchasePrice) || isNaN(stock)) {
         showTemporaryAlert('Mohon lengkapi semua field.', 'red');
         return;
     }
-
-    try {
-        await db.collection('products').doc(itemId).update(updatedData);
-        masterItems[editingMasterItemIndex] = { id: itemId, ...updatedData };
-        renderMasterItems();
-        closeEditMasterItemModal();
-        showTemporaryAlert('Barang master berhasil diperbarui.', 'green');
-    } catch (error) {
-        console.error("Error updating item:", error);
-        showTemporaryAlert('Gagal memperbarui barang.', 'red');
-    }
-}
     
     masterItems[editingMasterItemIndex] = {
         name: name,
@@ -925,22 +853,13 @@ function closeEditMasterItemModal() {
     editingMasterItemIndex = null;
 }
 
-// --- GANTI FUNGSI LAMA DENGAN INI ---
 function deleteMasterItem(index) {
-    const itemToDelete = masterItems[index];
-    const itemId = itemToDelete.id;
-
-    showMessageBox(`Yakin ingin menghapus "${itemToDelete.name}"?`, true, async () => {
-        try {
-            await db.collection('products').doc(itemId).delete();
-            masterItems.splice(index, 1);
-            renderMasterItems();
-            renderModalMasterItems();
-            showTemporaryAlert('Barang master berhasil dihapus.', 'green');
-        } catch (error) {
-            console.error("Error deleting item:", error);
-            showTemporaryAlert('Gagal menghapus barang.', 'red');
-        }
+    showMessageBox(`Yakin ingin menghapus "${masterItems[index].name}"?`, true, async () => {
+        masterItems.splice(index, 1);
+        await saveDataToFirestore();
+        renderMasterItems();
+        renderModalMasterItems();
+        showTemporaryAlert('Barang master berhasil dihapus.', 'green');
     });
 }
 
@@ -967,16 +886,16 @@ function showSuggestions(type) {
     filteredItems.forEach(item => {
         const suggestionItem = document.createElement('div');
         suggestionItem.classList.add('p-2', 'cursor-pointer', 'hover:bg-gray-100', 'border-b', 'border-gray-200');
-        suggestionItem.innerText = `${item.name} (Jual: ${formatRupiah(item.sellPrice || 0)} | Beli: ${formatRupiah(item.buyPrice || 0)})`;
+        suggestionItem.innerText = `${item.name} (Jual: ${formatRupiah(item.sellPrice || 0)} | Beli: ${formatRupiah(item.buyPrice|| 0)})`;
         suggestionItem.addEventListener('mousedown', (e) => {
             e.preventDefault();
             inputElement.value = item.name;
             if (type === 'penjualan') {
                 document.getElementById('hargaSatuanPenjualan').value = item.sellPrice;
-                document.getElementById('hargaBeliPenjualan').value = item.buyPrice;
+                document.getElementById('hargaBeliPenjualan').value = item.purchasePrice;
                 document.getElementById('jumlahKuantitasPenjualan').focus();
             } else {
-                document.getElementById('hargaBeliPembelian').value = item.buyPrice;
+                document.getElementById('hargaBeliPembelian').value = item.purchasePrice;
                 document.getElementById('hargaJualPembelian').value = item.sellPrice;
                 document.getElementById('jumlahKuantitasPembelian').focus();
             }
@@ -1015,13 +934,13 @@ function renderModalMasterItems() {
         row.classList.add('hover:bg-gray-50');
         row.insertCell(0).innerText = item.name;
         row.insertCell(1).innerText = formatRupiah(item.sellPrice || 0);
-        row.insertCell(2).innerText = formatRupiah(item.buyPrice || 0);
+        row.insertCell(2).innerText = formatRupiah(item.buyPrice|| 0);
         row.insertCell(3).innerText = item.stock || 0;
         const selectCell = row.insertCell(4);
         const selectButton = document.createElement('button');
         selectButton.innerText = 'Pilih';
         selectButton.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white', 'py-1', 'px-2', 'rounded-md', 'text-xs');
-        selectButton.onclick = () => selectMasterItemFromModal(item.name, item.sellPrice, item.buyPrice);
+        selectButton.onclick = () => selectMasterItemFromModal(item.name, item.sellPrice, item.purchasePrice);
         selectCell.appendChild(selectButton);
     });
 }
@@ -1716,7 +1635,7 @@ function generateStockReport() {
         row.insertCell(0).innerText = item.name;
         row.insertCell(1).innerText = item.stock || 0;
         row.insertCell(2).innerText = formatRupiah(item.sellPrice || 0);
-        row.insertCell(3).innerText = formatRupiah(item.buyPrice || 0);
+        row.insertCell(3).innerText = formatRupiah(item.buyPrice|| 0);
     });
 }
 
