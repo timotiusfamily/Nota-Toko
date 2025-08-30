@@ -17,14 +17,20 @@ let currentStrukData = null;
 let editingMasterItemIndex = null;
 let currentDetailedSales = [];
 
+// --- PWA Service Worker Registration ---
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js') // Path relatif lebih aman
-      .then(registration => console.log('Service Worker registered: ', registration))
-      .catch(registrationError => console.log('Service Worker registration failed: ', registrationError));
+    navigator.serviceWorker.register('service-worker.js')
+      .then(registration => {
+        console.log('Service Worker registered: ', registration);
+      })
+      .catch(registrationError => {
+        console.log('Service Worker registration failed: ', registrationError);
+      });
   });
 }
 
+// --- Initialization on DOMContentLoaded ---
 document.addEventListener('DOMContentLoaded', (event) => {
     auth.onAuthStateChanged(async (user) => {
         if (user) {
@@ -48,8 +54,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
             document.getElementById('salesFilterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('salesFilterEndDate').value = formattedDate;
+            
             document.getElementById('filterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('filterEndDate').value = formattedDate;
+
             document.getElementById('historyFilterStartDate').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
             document.getElementById('historyFilterEndDate').value = formattedDate;
 
@@ -67,6 +75,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 });
 
+// --- Firebase and Firestore Management ---
 async function loadDataFromFirestore() {
     try {
         const productsSnapshot = await db.collection('products').get();
@@ -116,10 +125,9 @@ function logout() {
     });
 }
 
+// --- Utility Functions ---
 function formatRupiah(angka) {
-    if (typeof angka !== 'number') {
-        angka = 0;
-    }
+    if(typeof angka !== 'number') angka = 0;
     let reverse = String(angka).split('').reverse().join('');
     let ribuan = reverse.match(/\d{1,3}/g);
     let result = ribuan.join('.').split('').reverse().join('');
@@ -227,13 +235,14 @@ function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
         renderPendingSales();
     } else if (sectionId === 'profitLoss') {
         generateProfitLossReport();
-    } else if (sectionId === 'salesReport') {
+    } else if (sectionId === 'salesReport') { 
         generateSalesReport();
     } else if (sectionId === 'stock') {
         generateStockReport();
     }
 }
 
+// --- Dashboard Management ---
 function renderDashboard() {
     let totalSalesToday = 0;
     let totalProfitToday = 0;
@@ -263,7 +272,7 @@ function renderDashboard() {
     document.getElementById('dashboardTotalPurchases').innerText = formatRupiah(totalPurchasesToday);
     document.getElementById('dashboardTotalStockValue').innerText = formatRupiah(totalStockValue);
 }
-
+// --- Master Items Management ---
 function renderMasterItems() {
     const masterItemsListBody = document.querySelector('#masterItemsList');
     masterItemsListBody.innerHTML = '';
@@ -293,6 +302,7 @@ function renderMasterItems() {
     });
 }
 
+// --- Custom Message Box ---
 function showMessageBox(message, isConfirm = false, onConfirm = null) {
     const modal = document.getElementById('customMessageBox');
     document.getElementById('messageBoxText').innerText = message;
@@ -315,5 +325,7 @@ function closeMessageBox() {
     const modal = document.getElementById('customMessageBox');
     modal.style.display = 'none';
 }
-// Dan seterusnya... salin semua sisa fungsi dari file asli Anda ke sini
-// Ini PENTING agar semua fungsi lain seperti editMasterItem, deleteMasterItem, dll. tetap ada.
+
+// ...PASTE SEMUA SISA FUNGSI DARI FILE LENGKAP SEBELUMNYA DI SINI...
+// Ini termasuk semua fungsi untuk Penjualan, Pembelian, Riwayat, Laporan, dll.
+// File ini harus sangat panjang.
