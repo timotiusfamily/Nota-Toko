@@ -421,6 +421,7 @@ function renderStrukPreviewPenjualan(strukData) {
 
 // FUNGSI REVISI
 // --- GANTI FUNGSI LAMA DENGAN INI ---
+// --- GANTI FUNGSI LAMA DENGAN VERSI `async` YANG BENAR INI ---
 async function selesaikanPembayaran() {
     if (currentItems.length === 0) {
         showTemporaryAlert('Tambahkan barang terlebih dahulu.', 'red');
@@ -438,6 +439,40 @@ async function selesaikanPembayaran() {
         }
     });
 
+    try {
+        await batch.commit();
+    } catch (error) {
+        console.error("Error updating stock:", error);
+        showMessageBox("Gagal memperbarui stok barang.", "red");
+        return;
+    }
+
+    const namaToko = document.getElementById('namaToko').value || 'Nama Toko';
+    const tanggal = document.getElementById('tanggalPenjualan').value;
+    const namaPembeli = document.getElementById('namaPembeli').value || 'Pelanggan Yth.';
+
+    const newStruk = {
+        id: Date.now(),
+        tanggal: tanggal,
+        pembeli: namaPembeli,
+        toko: namaToko,
+        items: JSON.parse(JSON.stringify(currentItems)),
+        totalPenjualan: currentGrandTotalPenjualan,
+        totalLabaRugi: currentGrandTotalLabaRugi
+    };
+
+    salesHistory.push(newStruk);
+    await saveDataToFirestore();
+
+    renderStrukPreviewPenjualan(newStruk);
+    document.getElementById('printerCard').style.display = 'block';
+
+    downloadStrukJPG();
+
+    showTemporaryAlert('Pembayaran berhasil diselesaikan dan stok diperbarui!', 'green');
+
+    generateStockReport();
+}
     try {
         await batch.commit();
     } catch (error) {
