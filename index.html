@@ -18,13 +18,13 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script>
       const firebaseConfig = {
-  apiKey: "AIzaSyDD_42nIWOt0StwtlShqa9T1KS22qGVEAg",
-  authDomain: "nota-toko-6c293.firebaseapp.com",
-  projectId: "nota-toko-6c293",
-  storageBucket: "nota-toko-6c293.firebasestorage.app",
-  messagingSenderId: "1060376706378",
-  appId: "1:1060376706378:web:97602bb05d2833af23d5b3"
-};
+          apiKey: "AIzaSyDD_42nIWOt0StwtlShqa9T1KS22qGVEAg",
+          authDomain: "nota-toko-6c293.firebaseapp.com",
+          projectId: "nota-toko-6c293",
+          storageBucket: "nota-toko-6c293.firebasestorage.app",
+          messagingSenderId: "1060376706378",
+          appId: "1:1060376706378:web:97602bb05d2833af23d5b3"
+      };
       firebase.initializeApp(firebaseConfig);
       const auth = firebase.auth();
       const db = firebase.firestore();
@@ -89,7 +89,8 @@
     <div class="flex items-end gap-2 mb-4">
         <div class="flex-grow">
             <label for="namaBarangPenjualan" class="block text-gray-700 text-sm mb-2">Nama Barang:</label>
-            <input type="text" id="namaBarangPenjualan" placeholder="Cari atau masukkan nama barang" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- PERUBAHAN DI SINI -->
+            <input type="text" id="namaBarangPenjualan" placeholder="Cari atau masukkan nama barang" autocomplete="off" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
             <div id="namaBarangSuggestionsPenjualan" class="absolute bg-white border border-gray-300 rounded-b-lg w-full max-h-40 overflow-y-auto z-10 shadow-md"></div>
         </div>
         <button class="search-icon-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" onclick="openMasterItemModal('penjualan')"><i class="fas fa-search"></i></button>
@@ -174,7 +175,8 @@
     <div class="flex items-end gap-2 mb-4">
         <div class="flex-grow">
             <label for="namaBarangPembelian" class="block text-gray-700 text-sm mb-2">Nama Barang:</label>
-            <input type="text" id="namaBarangPembelian" placeholder="Cari atau masukkan nama barang" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- PERUBAHAN DI SINI -->
+            <input type="text" id="namaBarangPembelian" placeholder="Cari atau masukkan nama barang" autocomplete="off" class="shadow-sm appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
             <div id="namaBarangSuggestionsPembelian" class="absolute bg-white border border-gray-300 rounded-b-lg w-full max-h-40 overflow-y-auto z-10 shadow-md"></div>
         </div>
         <button class="search-icon-btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200" onclick="openMasterItemModal('pembelian')"><i class="fas fa-search"></i></button>

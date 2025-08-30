@@ -247,30 +247,39 @@ function showSection(sectionId, clickedButton, keepCurrentTransaction = false) {
 
 // --- Dashboard Management ---
 function renderDashboard() {
-    let totalSales = 0;
-    let totalProfit = 0;
-    let totalPurchases = 0;
+    let totalSalesToday = 0;
+    let totalProfitToday = 0;
+    let totalPurchasesToday = 0;
     let totalStockValue = 0;
 
-    salesHistory.forEach(struk => {
-        totalSales += struk.totalPenjualan || 0;
-        totalProfit += struk.totalLabaRugi || 0;
+    // Mendapatkan tanggal hari ini dalam format YYYY-MM-DD
+    const today = new Date();
+    const formattedToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    // Filter transaksi penjualan hari ini
+    const salesToday = salesHistory.filter(struk => struk.tanggal === formattedToday);
+    salesToday.forEach(struk => {
+        totalSalesToday += struk.totalPenjualan || 0;
+        totalProfitToday += struk.totalLabaRugi || 0;
     });
 
-    purchaseHistory.forEach(struk => {
-        totalPurchases += struk.totalPembelian || 0;
+    // Filter transaksi pembelian hari ini
+    const purchasesToday = purchaseHistory.filter(struk => struk.tanggal === formattedToday);
+    purchasesToday.forEach(struk => {
+        totalPurchasesToday += struk.totalPembelian || 0;
     });
 
+    // Menghitung nilai total stok (kumulatif, tidak diubah)
     masterItems.forEach(item => {
         totalStockValue += (item.stock || 0) * (item.purchasePrice || 0);
     });
 
-    document.getElementById('dashboardTotalSales').innerText = formatRupiah(totalSales);
-    document.getElementById('dashboardTotalProfit').innerText = formatRupiah(totalProfit);
-    document.getElementById('dashboardTotalPurchases').innerText = formatRupiah(totalPurchases);
+    // Memperbarui elemen HTML dengan data harian
+    document.getElementById('dashboardTotalSales').innerText = formatRupiah(totalSalesToday);
+    document.getElementById('dashboardTotalProfit').innerText = formatRupiah(totalProfitToday);
+    document.getElementById('dashboardTotalPurchases').innerText = formatRupiah(totalPurchasesToday);
     document.getElementById('dashboardTotalStockValue').innerText = formatRupiah(totalStockValue);
 }
-
 // --- Penjualan Management ---
 function tambahAtauUpdateBarangPenjualan() {
     const namaBarang = document.getElementById('namaBarangPenjualan').value.trim();
@@ -445,6 +454,91 @@ async function selesaikanPembayaran() {
     generateStockReport(); // MODIFIED: Panggil setelah perubahan stok
 }
 
+// FUNGSI REVISI untuk membuat dan mengunduh struk sebagai JPG
+function downloadStrukJPG() {
+    const strukOutput = document.getElementById('strukOutputPenjualan');
+    if (!strukOutput || !strukOutput.innerHTML.trim()) {
+        showTemporaryAlert('Tidak ada struk untuk diunduh.', 'red');
+        return;
+    }
+
+    // Menggunakan html2canvas untuk mengubah elemen struk menjadi canvas
+    html2canvas(strukOutput, {
+        scale: 3, // Meningkatkan resolusi gambar untuk kualitas yang lebih baik
+        backgroundColor: '#ffffff' // Menghilangkan latar belakang transparan
+    }).then(canvas => {
+        // Mengubah canvas menjadi format blob (Binary Large Object)
+        canvas.toBlob(function(blob) {
+            // Menggunakan FileSaver.js untuk memicu dialog unduhan
+            const fileName = `struk_penjualan_${new Date().toISOString().slice(0, 10)}.jpg`;
+            saveAs(blob, fileName);
+            showTemporaryAlert('Struk berhasil diunduh sebagai JPG!', 'green');
+        }, 'image/jpeg', 0.9); // Mengatur format dan kualitas JPG
+    }).catch(error => {
+        console.error("Gagal membuat gambar dari canvas:", error);
+        showTemporaryAlert('Gagal mengunduh struk JPG.', 'red');
+    });
+}
+
+// ==========================================================
+// FUNGSI BARU UNTUK MENCETAK STRUK VIA ANDROID
+// ==========================================================
+function cetakStruk() {
+    // Gunakan variabel global 'currentStrukData' yang sudah disimpan
+    // saat tombol "Selesaikan Pembayaran" ditekan.
+    if (!currentStrukData) {
+        showTemporaryAlert('Tidak ada data struk untuk dicetak. Selesaikan pembayaran terlebih dahulu.', 'red');
+        return;
+    }
+
+    const struk = currentStrukData;
+    let receiptText = "";
+
+    // Helper untuk membuat teks rata tengah (asumsi lebar kertas 32 karakter)
+    const centerText = (text) => {
+        const width = 32;
+        if (text.length >= width) return text;
+        const spaces = Math.floor((width - text.length) / 2);
+        return ' '.repeat(spaces) + text;
+    };
+    
+    // Helper untuk membuat baris dengan teks kiri dan kanan
+    const createLine = (left, right) => {
+        const width = 32;
+        const spaces = width - left.length - right.length;
+        return left + ' '.repeat(spaces > 0 ? spaces : 1) + right;
+    };
+    
+    // Membangun teks struk
+    receiptText += centerText(struk.toko || 'NAMA TOKO') + '\n';
+    receiptText += '\n'; // spasi
+    receiptText += `Tgl: ${struk.tanggal}\n`;
+    receiptText += `Pembeli: ${struk.pembeli || 'Pelanggan'}\n`;
+    receiptText += '--------------------------------\n';
+
+    struk.items.forEach(item => {
+        receiptText += `${item.nama}\n`;
+        const hargaLine = `${item.qty} x ${item.hargaSatuan.toLocaleString('id-ID')}`;
+        receiptText += createLine(hargaLine, item.jumlah.toLocaleString('id-ID')) + '\n';
+    });
+    
+    receiptText += '--------------------------------\n';
+    receiptText += createLine('TOTAL:', struk.totalPenjualan.toLocaleString('id-ID')) + '\n';
+    receiptText += '\n';
+    receiptText += centerText('Terima Kasih') + '\n';
+    
+    // Memanggil "jembatan" ke aplikasi Android
+    if (typeof Android !== 'undefined' && Android.print) {
+        Android.print(receiptText);
+    } else {
+        // Pesan ini akan muncul jika dibuka di browser biasa
+        showTemporaryAlert("Fitur cetak hanya tersedia di aplikasi Android.", 'red');
+        console.log("--- Struk untuk Dicetak ---");
+        console.log(receiptText);
+    }
+}
+
+
 // FUNGSI REVISI untuk membagikan struk via WhatsApp
 function shareViaWhatsAppPenjualan() {
     // Ambil data dari variabel global
@@ -477,33 +571,6 @@ function shareViaWhatsAppPenjualan() {
 
     // Buka WhatsApp dengan pesan teks yang sudah disiapkan
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-}
-
-
-// FUNGSI REVISI untuk membuat dan mengunduh struk sebagai JPG
-function downloadStrukJPG() {
-    const strukOutput = document.getElementById('strukOutputPenjualan');
-    if (!strukOutput || !strukOutput.innerHTML.trim()) {
-        showTemporaryAlert('Tidak ada struk untuk diunduh.', 'red');
-        return;
-    }
-
-    // Menggunakan html2canvas untuk mengubah elemen struk menjadi canvas
-    html2canvas(strukOutput, {
-        scale: 3, // Meningkatkan resolusi gambar untuk kualitas yang lebih baik
-        backgroundColor: '#ffffff' // Menghilangkan latar belakang transparan
-    }).then(canvas => {
-        // Mengubah canvas menjadi format blob (Binary Large Object)
-        canvas.toBlob(function(blob) {
-            // Menggunakan FileSaver.js untuk memicu dialog unduhan
-            const fileName = `struk_penjualan_${new Date().toISOString().slice(0, 10)}.jpg`;
-            saveAs(blob, fileName);
-            showTemporaryAlert('Struk berhasil diunduh sebagai JPG!', 'green');
-        }, 'image/jpeg', 0.9); // Mengatur format dan kualitas JPG
-    }).catch(error => {
-        console.error("Gagal membuat gambar dari canvas:", error);
-        showTemporaryAlert('Gagal mengunduh struk JPG.', 'red');
-    });
 }
 
 // --- Pembelian Management ---
