@@ -326,7 +326,7 @@ function tambahAtauUpdateBarangPenjualan() {
     if (masterItem) {
         masteritem.sellPrice = hargaSatuan;
     } else {
-        masterItems.push({ name: namaBarang, price: hargaSatuan, purchasePrice: hargaBeli, stock: 0 });
+        masterItems.push({ name: namaBarang, buyPrice: hargaSatuan, buyPrice: hargaBeli, stock: 0 });
     }
     saveDataToFirestore();
 
