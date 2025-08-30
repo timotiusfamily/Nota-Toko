@@ -81,19 +81,26 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 
 // --- Firebase and Firestore Management ---
+// --- GANTI FUNGSI LAMA DENGAN INI ---
 async function loadDataFromFirestore() {
     try {
-        const docRef = db.collection('users').doc(userId);
-        const doc = await docRef.get();
-        if (doc.exists) {
-            const data = doc.data();
-            masterItems = data.masterItems || [];
-            salesHistory = data.salesHistory || [];
-            purchaseHistory = data.purchaseHistory || [];
-            pendingSales = data.pendingSales || [];
+        // Mengambil data produk dari koleksi terpusat '/products'
+        const productsSnapshot = await db.collection('products').get();
+        masterItems = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log("Master items loaded from /products collection.");
+
+        // Mengambil data spesifik user (riwayat, dll) dari '/users/{userId}'
+        const userDocRef = db.collection('users').doc(userId);
+        const userDoc = await userDocRef.get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            salesHistory = userData.salesHistory || [];
+            purchaseHistory = userData.purchaseHistory || [];
+            pendingSales = userData.pendingSales || [];
         } else {
-            console.log("No data found for user, initializing new data.");
+            console.log("No user-specific data found for user.");
         }
+
         renderMasterItems();
         renderDashboard();
     } catch (error) {
